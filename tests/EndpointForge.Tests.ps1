@@ -628,7 +628,8 @@ Describe 'EndpointForge terminal summary experience' {
         ($plainLines -join "`n") | Should -Match 'TEST-PC'
         ($plainLines -join "`n") | Should -Match 'Review the remediation plan'
         ($plainLines -join "`n") | Should -Match 'did not change Windows settings'
-        ($plainLines -join "`n") | Should -Match 'brief outbound connections'
+        ($plainLines -join "`n") | Should -Match 'Approved network-active items'
+        ($plainLines -join "`n") | Should -Match 'bounded health facts'
         $colorCallCount | Should -BeGreaterThan 0
         $passThruOutput.Count | Should -Be 1
         [object]::ReferenceEquals($summary, $passThruOutput[0]) | Should -BeTrue
@@ -724,21 +725,24 @@ Describe 'EndpointForge guided menu experience' {
             PSTypeName = 'EndpointForge.EndpointSummary'; ComputerName = 'MENU-PC'; OverallStatus = 'Healthy';
             CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 0; UnknownCount = 0
         }
+        $networkBaselinePath = Join-Path $script:ProjectRoot 'examples\EverydayChecks.json'
         $script:EFMenuInputs.Enqueue('1')
+        $script:EFMenuInputs.Enqueue('NETWORK')
         $script:EFMenuInputs.Enqueue('Q')
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
         Mock Get-EFEndpointSummary -ModuleName EndpointForge { $summary }
         Mock Show-EFEndpointSummary -ModuleName EndpointForge { 'unexpected pipeline output' }
 
-        $output = @(Show-EFMenu -Baseline EnterpriseRecommended -IncludeSoftware `
+        $output = @(Show-EFMenu -Baseline $networkBaselinePath -IncludeSoftware `
             -MinimumFreeSpacePercent 25 -MaximumUptimeDays 10 -NoProgress -NoPause -NoColor -PassThru)
 
         $output.Count | Should -Be 1
         [object]::ReferenceEquals($summary, $output[0].LastSummary) | Should -BeTrue
         $output[0].ActionCount | Should -Be 1
         Should -Invoke Get-EFEndpointSummary -ModuleName EndpointForge -Times 1 -Exactly -ParameterFilter {
-            $Baseline -eq 'EnterpriseRecommended' -and $IncludeSoftware -and
-                $MinimumFreeSpacePercent -eq 25 -and $MaximumUptimeDays -eq 10 -and $NoProgress
+            $Baseline.Name -eq 'Contoso.EverydayChecks' -and $AllowNetworkChecks -and
+                $IncludeSoftware -and $MinimumFreeSpacePercent -eq 25 -and
+                $MaximumUptimeDays -eq 10 -and $NoProgress
         }
         Should -Invoke Show-EFEndpointSummary -ModuleName EndpointForge -Times 1 -Exactly -ParameterFilter {
             $InputObject.ComputerName -eq 'MENU-PC' -and $NoColor

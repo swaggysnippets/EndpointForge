@@ -5,18 +5,19 @@ function Get-EFBaseline {
 
     .DESCRIPTION
     A checklist is a list of things expected to be true, such as Windows settings,
-    required files, recent events, or an available network service. PowerShell commands
-    call it a baseline for compatibility. This command only loads and validates the JSON
-    file. It does not read a target file or event log, attempt a network connection, check
-    a setting, or change a computer. ListAvailable shows the checklists included with the
-    module.
+    storage, applications, jobs, files, certificates, recent events, or an approved
+    network service. PowerShell commands call it a baseline for compatibility. This
+    command only loads and validates the JSON file. It does not read a target, perform a
+    network-active check, check a setting, or change a computer. ListAvailable shows the
+    checklists included with the module.
 
     .PARAMETER Name
     The built-in checklist name. EnterpriseRecommended is the default.
 
     .PARAMETER Path
     The path to a custom checklist JSON file. Review custom files before use because they
-    choose which local paths, event logs, hosts, and ports later checks can inspect.
+    choose which applications, jobs, local paths, event logs, certificates, accounts,
+    update services, hosts, ports, and web addresses later checks can inspect or contact.
 
     .PARAMETER ListAvailable
     Lists information about every checklist included with the installed module.

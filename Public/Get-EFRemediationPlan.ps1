@@ -15,6 +15,10 @@ function Get-EFRemediationPlan {
     .PARAMETER ControlId
     Limits the plan to selected checklist item IDs.
 
+    .PARAMETER AllowNetworkChecks
+    Allows network-active items to be evaluated while building the plan, after their
+    destinations and purposes have been reviewed. The plan still never changes Windows.
+
     .PARAMETER IncludeCompliant
     Includes compliant and non-applicable steps in the Steps collection.
 
@@ -38,6 +42,8 @@ function Get-EFRemediationPlan {
 
         [string[]]$ControlId,
 
+        [switch]$AllowNetworkChecks,
+
         [switch]$IncludeCompliant,
 
         [switch]$NoProgress
@@ -47,6 +53,7 @@ function Get-EFRemediationPlan {
     $reportParameters = @{
         Baseline   = $resolvedBaseline
         NoProgress = $NoProgress
+        AllowNetworkChecks = [bool]$AllowNetworkChecks
     }
     if ($PSBoundParameters.ContainsKey('ControlId')) {
         $reportParameters.ControlId = $ControlId

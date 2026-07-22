@@ -5,10 +5,15 @@ function Test-EFEndpointCompliance {
 
     .DESCRIPTION
     A checklist is a list of things expected to be true; scripts call it a baseline and
-    call a matching result compliant. Items can cover Windows settings, exact local files,
-    literal text near the end of a log, recent Windows event IDs, or one TCP host and
-    port. This command does not apply fixes or change Windows. A TcpPort item does make
-    one real, observable connection attempt and sends no application data.
+    call a matching result compliant. Items can cover settings, restart and update state,
+    storage, applications, jobs, files, certificates, events, processes, account
+    relationships, and approved network services. This command does not apply fixes or
+    change Windows.
+
+    TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
+    LocalGroupMembership are network-active. They are blocked unless AllowNetworkChecks is
+    supplied. Contacted services, identity providers, or monitoring tools may record the
+    activity.
 
     The command returns True only when every checked value matches and every check
     completed. Matching log lines, event messages, and event data are not included in the
@@ -16,10 +21,15 @@ function Test-EFEndpointCompliance {
 
     .PARAMETER Baseline
     A built-in checklist name, checklist JSON file, or validated checklist object. Review
-    custom paths, event queries, hosts, and ports before running it.
+    every target and network-active item before running it.
 
     .PARAMETER ControlId
     One or more checklist item IDs to test. Every item is tested by default.
+
+    .PARAMETER AllowNetworkChecks
+    Allows the five network-active types after their destinations, requested account
+    identities, update options, and purposes have been reviewed. This is an explicit
+    acknowledgement, not a network authorization system.
 
     .PARAMETER PassThru
     Returns the EndpointForge.ComplianceReport instead of a Boolean.
@@ -34,10 +44,9 @@ function Test-EFEndpointCompliance {
     $report = Test-EFEndpointCompliance -PassThru -NoProgress
 
     .EXAMPLE
-    Test-EFEndpointCompliance -Baseline .\Contoso.EverydayChecks.json -NoProgress
+    Test-EFEndpointCompliance -Baseline .\Contoso.EverydayChecks.json -AllowNetworkChecks -NoProgress
 
-    Returns a Boolean for the everyday custom checklist. A TcpPort item can create an
-    observable connection attempt even though the check does not change Windows.
+    Returns a Boolean for the expanded everyday checklist after approved network activity.
 
     .OUTPUTS
     System.Boolean
@@ -51,6 +60,8 @@ function Test-EFEndpointCompliance {
 
         [string[]]$ControlId,
 
+        [switch]$AllowNetworkChecks,
+
         [switch]$PassThru,
 
         [switch]$NoProgress
@@ -59,6 +70,7 @@ function Test-EFEndpointCompliance {
     $parameters = @{
         Baseline   = $Baseline
         NoProgress = $NoProgress
+        AllowNetworkChecks = [bool]$AllowNetworkChecks
     }
     if ($PSBoundParameters.ContainsKey('ControlId')) {
         $parameters.ControlId = $ControlId

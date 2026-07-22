@@ -68,6 +68,37 @@ function Get-EFControlCapability {
             $howChecked = 'Reads whether the named optional Windows feature is enabled or disabled.'
             $whatWouldChange = 'Enables or disables only the named optional Windows feature. EndpointForge never restarts the PC automatically.'
         }
+        'PendingRestart' {
+            $checkCommands = @('Get-EFPendingReboot')
+            $howChecked = 'Reads Windows servicing, update, installer, file-rename, and computer-rename indicators to answer whether a restart is waiting.'
+            $whatWouldChange = 'Nothing. EndpointForge never restarts the computer automatically.'
+        }
+        'DiskSpace' {
+            $checkCommands = @('Get-CimInstance')
+            $howChecked = 'Reads free space for one exact fixed local drive and compares it with the requested percentage, gigabytes, or both.'
+            $whatWouldChange = 'Nothing. EndpointForge does not delete, move, compress, or clean up files.'
+        }
+        'WindowsUpdateAvailable' {
+            $checkCommands = @()
+            $howChecked = 'With explicit network approval, asks this computer''s configured Windows Update or WSUS service how many required software updates are waiting. Update titles and metadata are not included in results.'
+            $whatWouldChange = 'Nothing is installed or configured. The scan can contact the update service and refresh Windows Update scan metadata, but EndpointForge never downloads updates, accepts licenses, installs updates, or restarts Windows.'
+        }
+        'InstalledApplication' {
+            $checkCommands = @()
+            $howChecked = 'Reads Windows uninstall records for one exact application name and optional publisher, product code, architecture, scope, or version. It never uses Win32_Product.'
+            $whatWouldChange = 'Nothing. EndpointForge does not install, repair, update, or remove software.'
+        }
+        'ScheduledTaskHealth' {
+            $checkCommands = @('Get-ScheduledTask', 'Get-ScheduledTaskInfo')
+            $administratorRecommendedForCheck = $true
+            $howChecked = 'Reads one exact scheduled job enabled state, last run time, and result code. Task actions and arguments are never returned.'
+            $whatWouldChange = 'Nothing. EndpointForge does not start, stop, enable, disable, create, or edit scheduled jobs.'
+        }
+        'DefenderSignatureHealth' {
+            $checkCommands = @('Get-MpComputerStatus')
+            $howChecked = 'Reads the age of Microsoft Defender threat definitions and compares it with the requested maximum age.'
+            $whatWouldChange = 'Nothing. EndpointForge reports the age but does not refresh Defender or change antivirus settings.'
+        }
         'FileExists' {
             $checkCommands = @('Get-Item')
             $howChecked = 'Looks for one exact file on a local Windows drive. Environment variables such as %ProgramData% are expanded; folders, wildcards, relative paths, and network paths are not accepted.'
@@ -77,6 +108,11 @@ function Get-EFControlCapability {
             $checkCommands = @('Get-Item')
             $howChecked = 'Reads a limited number of lines from the end of one local text file and looks for exact ordinary text. Matching lines and file contents are never returned in the result.'
             $whatWouldChange = 'Nothing. EndpointForge reads the text file but never edits, clears, rotates, or copies it.'
+        }
+        'FileFreshness' {
+            $checkCommands = @('Get-Item')
+            $howChecked = 'Reads the modified time of one exact local file and compares its age with the requested limit. File contents are not read.'
+            $whatWouldChange = 'Nothing. EndpointForge does not open, create, edit, move, or delete the file.'
         }
         'WindowsEvent' {
             $checkCommands = @('Get-WinEvent')
@@ -88,6 +124,28 @@ function Get-EFControlCapability {
         'TcpPort' {
             $howChecked = 'Opens one time-limited TCP connection to the exact host and port, then closes it without sending application data. A successful connection does not prove that the application itself is healthy.'
             $whatWouldChange = 'Nothing on this computer. The destination or network monitoring tools may record the brief connection attempt.'
+        }
+        'DnsResolution' {
+            $howChecked = 'With explicit network approval, asks Windows to resolve one absolute server name inside a time-limited worker. Windows can answer from its cache or hosts file, or contact DNS; returned addresses are not included in results.'
+            $whatWouldChange = 'Nothing on this computer. DNS infrastructure and network monitoring tools may record a request.'
+        }
+        'HttpEndpointHealth' {
+            $howChecked = 'With explicit network approval, sends a time-limited HEAD or GET check to one exact HTTP or HTTPS address and compares only its status code. A GET response body is not read.'
+            $whatWouldChange = 'Nothing on this computer. The web service, configured proxy, and network monitoring tools may record the request; response headers are not included in results and the response body is not read.'
+        }
+        'CertificateExpiry' {
+            $howChecked = 'Opens one Windows certificate store read-only, finds one exact thumbprint, and checks only its time window and remaining days. It does not verify trust, revocation, names, intended use, or a private key.'
+            $whatWouldChange = 'Nothing. EndpointForge does not import, export, renew, remove, or access certificate private keys.'
+        }
+        'ProcessRunning' {
+            $howChecked = 'Checks whether one exact program name is running. Process IDs and other details are not included in results; command lines, owners, and loaded modules are not read.'
+            $whatWouldChange = 'Nothing. EndpointForge does not start, stop, suspend, or inspect the contents of a process.'
+        }
+        'LocalGroupMembership' {
+            $checkCommands = @('Get-LocalGroup')
+            $administratorRecommendedForCheck = $true
+            $howChecked = 'With explicit network approval, reads one exact local group inside a time-limited worker, resolves only the requested account to a security identifier, and compares it with direct-member identifiers. Unrelated member identities are not resolved or included in results.'
+            $whatWouldChange = 'Nothing. EndpointForge does not add or remove accounts or change local groups. Windows may contact an organizational identity provider while resolving the requested account.'
         }
         'BitLocker' {
             $checkCommands = @('Get-BitLockerVolume')

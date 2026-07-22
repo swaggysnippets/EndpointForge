@@ -1,13 +1,15 @@
-$script:BeginnerProjectRoot = Split-Path -Parent $PSScriptRoot
-$script:BeginnerManifestPath = Join-Path $script:BeginnerProjectRoot 'EndpointForge.psd1'
-Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
-Import-Module $script:BeginnerManifestPath -Force
+BeforeAll {
+    $script:UserFriendlyProjectRoot = Split-Path -Parent $PSScriptRoot
+    $script:UserFriendlyManifestPath = Join-Path $script:UserFriendlyProjectRoot 'EndpointForge.psd1'
+    Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
+    Import-Module $script:UserFriendlyManifestPath -Force
+}
 
 AfterAll {
     Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
 }
 
-Describe 'EndpointForge beginner-first language' {
+Describe 'EndpointForge user-friendly language' {
     It 'explains every built-in checklist item' {
         $checklist = Get-EFBaseline
 
@@ -22,12 +24,12 @@ Describe 'EndpointForge beginner-first language' {
     }
 
     It 'shows a goal-based main menu without unexplained framework jargon' {
-        $script:BeginnerMenuLines = [Collections.Generic.List[string]]::new()
+        $script:UserFriendlyMenuLines = [Collections.Generic.List[string]]::new()
         Mock Read-Host -ModuleName EndpointForge { 'Q' }
-        Mock Write-Host -ModuleName EndpointForge { $script:BeginnerMenuLines.Add([string]$Object) }
+        Mock Write-Host -ModuleName EndpointForge { $script:UserFriendlyMenuLines.Add([string]$Object) }
 
         Show-EFMenu -NoPause -NoColor
-        $text = $script:BeginnerMenuLines -join "`n"
+        $text = $script:UserFriendlyMenuLines -join "`n"
 
         $text | Should -Match 'Check this computer now'
         $text | Should -Match 'Understand the latest results'
@@ -37,8 +39,8 @@ Describe 'EndpointForge beginner-first language' {
     }
 
     It 'translates internal check statuses for the terminal' {
-        $script:BeginnerSummaryLines = [Collections.Generic.List[string]]::new()
-        Mock Write-Host -ModuleName EndpointForge { $script:BeginnerSummaryLines.Add([string]$Object) }
+        $script:UserFriendlySummaryLines = [Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName EndpointForge { $script:UserFriendlySummaryLines.Add([string]$Object) }
         $summary = [pscustomobject]@{
             ComputerName = 'SAMPLE-PC'; OperatingSystem = 'Windows'; OperatingSystemBuild = '26100';
             OverallStatus = 'Healthy'; Score = 100; HealthStatus = 'Healthy'; HealthScore = 100;
@@ -49,7 +51,7 @@ Describe 'EndpointForge beginner-first language' {
         }
 
         $null = $summary | Show-EFEndpointSummary -NoColor
-        $text = $script:BeginnerSummaryLines -join "`n"
+        $text = $script:UserFriendlySummaryLines -join "`n"
 
         $text | Should -Match 'Looks good'
         $text | Should -Match 'Matches the checklist'

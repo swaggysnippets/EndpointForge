@@ -4,11 +4,32 @@ All notable changes use the structure from Keep a Changelog, and versions follow
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-22
+
+### Added
+
+- Twelve user-friendly, report-only checklist item types: pending restart (`PendingRestart`), drive capacity (`DiskSpace`), available Windows software updates (`WindowsUpdateAvailable`), installed application and version (`InstalledApplication`), scheduled-job health (`ScheduledTaskHealth`), Defender definition age (`DefenderSignatureHealth`), file modified age (`FileFreshness`), certificate validity (`CertificateExpiry`), DNS resolution (`DnsResolution`), HTTP response health (`HttpEndpointHealth`), running process (`ProcessRunning`), and direct local-group membership (`LocalGroupMembership`).
+- A 24-type checklist catalog in the guided menu and documentation, with each type expressed as the practical question it answers.
+- Expanded `EverydayChecks` examples for computer health, applications, jobs, files, certificates, access, and approved network services.
+
+### Changed
+
+- Local and fleet entry points now require explicit `-AllowNetworkChecks` acknowledgement for the five network-active types: `TcpPort`, `DnsResolution`, `HttpEndpointHealth`, `WindowsUpdateAvailable`, and `LocalGroupMembership`. Local-group account-name resolution can contact an organizational identity provider; supplying a SID avoids that lookup.
+- Remote computers running the expanded checklist types require EndpointForge 0.6.0 or later.
+- Product, help, contribution, and release language now consistently describes the experience as user-friendly.
+
+### Safety
+
+- Windows Update availability uses one time-limited scan against the computer's configured update service, returns only a count, and never downloads or installs updates, accepts licenses, changes update settings, or restarts Windows.
+- Application checks read explicit uninstall registry views and never query `Win32_Product`; scheduled-task, certificate, process, group, name-resolution, HTTP, and update results omit sensitive evidence that is not needed for the answer.
+- DNS, TCP, HTTP, update, and local-group work is bounded to validated targets and isolated time limits. HTTP uses normal certificate validation, no explicit origin or proxy credentials or custom headers, no response-body read, and redirects disabled by default; when enabled, at most five safe same-origin redirects are followed.
+- Permission and provider failures, incomplete update results, warnings, ambiguous identity resolution, and hard worker timeouts remain unavailable answers rather than false passing results. Ordinary TCP or HTTP refusals and timeouts, and normally completed unresolved-name checks, remain known mismatches.
+
 ## [0.5.0] - 2026-07-22
 
 ### Added
 
-- Four beginner-friendly, report-only checklist item types: exact local file presence (`FileExists`), literal text near the end of a log (`FileContainsText`), recent Windows event IDs (`WindowsEvent`), and a bounded TCP connection (`TcpPort`).
+- Four user-friendly, report-only checklist item types: exact local file presence (`FileExists`), literal text near the end of a log (`FileContainsText`), recent Windows event IDs (`WindowsEvent`), and a bounded TCP connection (`TcpPort`).
 - An edit-before-use `EverydayChecks` template and `examples/EverydayChecks.json` with plain-language purpose, safety, manual-action, and recovery guidance.
 - Readiness, validation, menu, report, comparison, and fleet support for the new Boolean checklist results.
 - Explicit `-AllowNetworkChecks` consent before `TcpPort` items can fan out from remote computers.
@@ -16,7 +37,7 @@ All notable changes use the structure from Keep a Changelog, and versions follow
 ### Changed
 
 - Checklist explanations now cover things expected to be true, not only Windows settings, and describe how every item is checked before it is run.
-- Report-only differences lead to manual guidance instead of incorrectly directing beginners to the safe-fix assistant.
+- Report-only differences lead to manual guidance instead of incorrectly directing users to the safe-fix assistant.
 - Fleet targets carrying the new checklist types now require EndpointForge 0.5.0 or later.
 
 ### Safety
@@ -30,7 +51,7 @@ All notable changes use the structure from Keep a Changelog, and versions follow
 
 ### Added
 
-- Goal-based beginner menu for checking a computer, understanding results, safely fixing selected problems, saving and comparing reports, checking prepared remote computers, and managing checklists.
+- Goal-based user-friendly menu for checking a computer, understanding results, safely fixing selected problems, saving and comparing reports, checking prepared remote computers, and managing checklists.
 - Read-only `Get-EFEndpointReadiness` preflight that explains platform, permission, remote-session, checklist, provider, and fix availability without evaluating settings.
 - Conservative `Compare-EFEndpointSummary` before-and-after comparisons for objects, menu reports, menu sessions, and exported JSON.
 - Self-contained, UTF-8 HTML reports with embedded styling, encoded data, and no scripts or external resources.

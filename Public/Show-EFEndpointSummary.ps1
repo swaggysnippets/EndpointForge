@@ -5,16 +5,15 @@ function Show-EFEndpointSummary {
 
     .DESCRIPTION
     Explains computer health, checklist results, items needing attention, and a suggested
-    next step. Checklist items can cover Windows settings, exact local files, literal
-    text near the end of a log, recent Windows event IDs, or a named TCP connection. It
-    is designed for someone who does not know PowerShell or configuration-management
-    terminology. Rendering an existing result never changes Windows or repeats its
-    checks.
+    next step. Checklist items can cover Windows settings, updates, storage, applications,
+    jobs, files, certificates, events, processes, account relationships, and approved
+    network services. It is designed for someone who does not know PowerShell or
+    configuration-management terminology. Rendering an existing result never changes
+    Windows or repeats its checks.
 
     A checklist is a list of things expected to be true. Scripts call it a baseline, but
     the terminal display uses everyday language. When this command collects a new result
-    itself, a TcpPort item makes one observable connection attempt to the named
-    destination and sends no application data.
+    itself, network-active items are blocked unless AllowNetworkChecks is supplied.
 
     .PARAMETER InputObject
     A summary returned by Get-EFEndpointSummary.
@@ -28,6 +27,12 @@ function Show-EFEndpointSummary {
 
     .PARAMETER IncludeSoftware
     Includes software when the command collects its own summary.
+
+    .PARAMETER AllowNetworkChecks
+    Allows TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
+    LocalGroupMembership items after their destinations, requested account identities,
+    update options, and purposes have been reviewed. Their activity may be recorded by
+    contacted services, identity providers, or monitoring tools.
 
     .PARAMETER MinimumFreeSpacePercent
     Sets the system-drive warning threshold when the command collects its own summary.
@@ -79,6 +84,9 @@ function Show-EFEndpointSummary {
         [switch]$IncludeSoftware,
 
         [Parameter(ParameterSetName = 'Collect')]
+        [switch]$AllowNetworkChecks,
+
+        [Parameter(ParameterSetName = 'Collect')]
         [ValidateRange(1, 99)]
         [int]$MinimumFreeSpacePercent = 15,
 
@@ -104,6 +112,7 @@ function Show-EFEndpointSummary {
             $summaryParameters = @{
                 Baseline                = $Baseline
                 IncludeSoftware         = $IncludeSoftware
+                AllowNetworkChecks      = [bool]$AllowNetworkChecks
                 MinimumFreeSpacePercent = $MinimumFreeSpacePercent
                 MaximumUptimeDays       = $MaximumUptimeDays
                 NoProgress              = $NoProgress
@@ -165,7 +174,7 @@ function Show-EFEndpointSummary {
         & $writeLine ''
         & $writeLine 'EndpointForge computer checkup' ([ConsoleColor]::Cyan)
         & $writeLine ('=' * 72) ([ConsoleColor]::DarkGray)
-        & $writeLine 'This check did not change Windows settings. TCP checklist items, when present, made brief outbound connections without sending application data.' ([ConsoleColor]::DarkGray)
+        & $writeLine 'This check did not change Windows settings. Approved network-active items, when present, contacted their named or configured services and returned only bounded health facts.' ([ConsoleColor]::DarkGray)
         & $writeLine ("{0}  |  {1}  |  Build {2}" -f $summary.ComputerName, $summary.OperatingSystem, $summary.OperatingSystemBuild)
         & $writeLine ("OVERALL RESULT        {0}  -  Score {1}/100" -f (& $friendlyStatus $summary.OverallStatus), $summary.Score) $statusColor
         & $writeLine ("Computer health       {0}  -  Score {1}/100" -f (& $friendlyStatus $summary.HealthStatus), $summary.HealthScore)

@@ -5,10 +5,11 @@ function Test-EFBaseline {
 
     .DESCRIPTION
     A checklist is a list of things expected to be true, such as Windows settings,
-    required files, recent events, and available network services; scripts call it a
-    baseline. This command checks the file structure, item IDs, value types, supported-fix
-    safety, and type-specific requirements. It does not run any item or contact a host.
-    It returns True or False by default. PassThru returns detailed validation results.
+    storage, applications, jobs, files, certificates, recent events, and approved network
+    services; scripts call it a baseline. This command checks the file structure, item IDs,
+    value types, supported-fix safety, and type-specific requirements. It does not run any
+    item or contact a service. Validation confirms safe input shape, not organizational
+    authorization. It returns True or False by default. PassThru returns detailed results.
 
     .PARAMETER Name
     The name of a built-in checklist.
@@ -78,10 +79,11 @@ function Test-EFBaseline {
                     "$($rebootingControls.Count) remediable control(s) may require a restart. EndpointForge never restarts devices automatically."
                 )
             }
-            $networkControls = @($baseline.Controls | Where-Object Type -eq 'TcpPort')
+            $networkControls = @($baseline.Controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
             if ($networkControls.Count -gt 0) {
+                $networkTypes = @($networkControls.Type | Sort-Object -Unique) -join ', '
                 $warnings.Add(
-                    "$($networkControls.Count) TCP connection check(s) will briefly contact the named host and port when this checklist is run. The destination or network monitoring tools may record each attempt."
+                    "$($networkControls.Count) network-active check(s) ($networkTypes) can contact named or configured services when this checklist is run. Those services or network monitoring tools may record the activity."
                 )
             }
         }

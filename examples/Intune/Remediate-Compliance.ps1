@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 try {
-    Import-Module EndpointForge -MinimumVersion 0.5.0 -Force
+    Import-Module EndpointForge -MinimumVersion 0.6.0 -Force
     Set-EFConfiguration -LogPath '%ProgramData%\EndpointForge\endpointforge.jsonl'
 
     # The Intune deployment owner must review and maintain this allowlist. Assigning this
