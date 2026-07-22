@@ -1,0 +1,227 @@
+TOPIC
+    about_EndpointForge
+
+SHORT DESCRIPTION
+    Enterprise-safe Windows endpoint inventory, health, compliance, remediation, and reporting.
+
+LONG DESCRIPTION
+    EndpointForge is a local endpoint automation module intended for execution through
+    Intune, Configuration Manager, RMM systems, scheduled tasks, or PowerShell remoting.
+
+    Read-only commands return structured objects. Show-EFEndpointSummary provides a
+    terminal view for people without changing the underlying automation contract.
+    Show-EFMenu provides a guided interactive path across assessment, planning, preview,
+    guarded remediation, baseline authoring, and export. Remediation supports WhatIf and
+    Confirm, requires elevation when changes are needed, and modifies only controls
+    explicitly marked Remediable.
+
+    The module does not reboot endpoints, enable BitLocker, change firmware, clear TPMs,
+    install software, query Win32_Product, or download and execute remote content.
+
+60-SECOND FIRST RUN
+    Install for the current user with one of these commands:
+
+        Install-PSResource -Name EndpointForge -Scope CurrentUser
+
+        Install-Module -Name EndpointForge -Scope CurrentUser
+
+    Then open the guided operator menu:
+
+        Import-Module EndpointForge
+        Show-EFMenu
+
+    The menu starts with read-only actions and clearly labels actions that write files or
+    can change the endpoint. For a direct read-only check instead:
+
+        Get-EFEndpointSummary | Show-EFEndpointSummary -Detailed
+
+    Use -NoColor for plain text, -NoProgress for quiet collection, and -PassThru to
+    receive one menu-session object after quitting.
+
+COMMAND LAYERS
+    Show-EFMenu is the interactive operator layer. It keeps the current baseline,
+    assessment, plan, preview, remediation result, and export path together for one menu
+    session. It is host-output only by default. Use the direct object commands below for
+    unattended automation.
+
+    Menu remediation always generates a fresh plan, lets the operator select automatic
+    controls, runs WhatIf, requires Administrator access, and then requires the exact
+    APPLY acknowledgement. -NoPause never bypasses those safeguards. The menu never
+    restarts the endpoint.
+
+    Get-EFEndpointSummary combines identity, health, restart, compliance, and collection
+    quality into one pipeline-friendly object. Use -IncludeSoftware only when the larger
+    software payload is needed. Use -NoProgress in non-interactive hosts.
+
+    Show-EFEndpointSummary renders the summary for a person. It accepts summary objects
+    from the pipeline or can collect its own summary. Use -PassThru to preserve the input
+    object in the pipeline. Scripts should consume Get-EFEndpointSummary output, not parse
+    the rendered terminal text.
+
+    Test-EFEndpointCompliance returns a Boolean by default and can be used directly in an
+    if statement. Get-EFComplianceReport returns the full report, including Results,
+    Score, and ExitCode. Test-EFEndpointCompliance -PassThru is an equivalent way to ask
+    for that report.
+
+    Get-EFRemediationPlan explains what is compliant, actionable, non-remediable, or
+    unavailable before changes begin. -IncludeCompliant returns the full decision set.
+    -ControlId limits planning to explicitly selected controls.
+
+RECOMMENDED OPERATOR WORKFLOW
+    Use observe, validate, plan, preview, apply, verify, and export in that order.
+
+    Interactive workflow:
+
+        Show-EFMenu
+
+    Object-first or unattended workflow:
+
+    1. Observe:
+
+        $summary = Get-EFEndpointSummary
+        $summary | Show-EFEndpointSummary -Detailed
+
+    2. Validate the selected baseline:
+
+        $baseline = Get-EFBaseline -Name EnterpriseRecommended
+        $baseline | Test-EFBaseline
+
+    3. Review the change plan:
+
+        $plan = Get-EFRemediationPlan -Baseline $baseline -IncludeCompliant
+        $plan
+
+    4. Preview and apply approved controls:
+
+        $ids = 'EF-FW-DOMAIN', 'EF-UAC-ENABLED'
+        Invoke-EFEndpointRemediation -Baseline $baseline -ControlId $ids -WhatIf
+        $result = Invoke-EFEndpointRemediation -Baseline $baseline -ControlId $ids
+
+    5. Verify independently and export evidence:
+
+        $verification = Get-EFComplianceReport -Baseline $baseline -ControlId $ids
+        $verification | Export-EFEndpointReport -Path .\verification.json -Force
+
+    Run the apply step from an elevated PowerShell session. Keep confirmation enabled
+    for interactive work. Use -Confirm:$false only in an approved non-interactive rollout
+    after testing the plan and WhatIf result in a representative pilot ring.
+
+AUTOMATION RESULTS
+    Test-EFEndpointCompliance returns $true only when every applicable selected control
+    is compliant and no evaluation errors occurred. It returns $false otherwise.
+
+    Compliance reports from Get-EFComplianceReport expose ExitCode:
+
+        0  All applicable controls are compliant
+        2  One or more controls are noncompliant
+        3  One or more controls could not be evaluated
+
+    Remediation reports expose ExitCode:
+
+        0  Successfully remediated or no change required
+        2  Noncompliant controls remain
+        3  Evaluation, remediation, or verification failure
+
+    Health reports expose ExitCode:
+
+        0  Healthy
+        1  Warning
+        2  Critical
+
+    Module functions never exit the hosting PowerShell process. A wrapper script should
+    read ExitCode and call exit only when required by its management platform.
+
+ELEVATION AND CAPABILITY RESULTS
+    Most inventory, summary, health, and compliance data is available to standard users.
+    Windows may protect read-only BitLocker, TPM, Secure Boot, and optional-feature
+    providers behind administrator privileges. Remediation requires elevation whenever a
+    change is needed.
+
+    NonCompliant means the current value was read and did not match the baseline.
+
+    NotApplicable means the feature, service, cmdlet, or hardware capability is absent or
+    unsupported. Confirm that the baseline is appropriate for that device class.
+
+    Error means EndpointForge could not establish the current value. Read the result
+    message, check elevation and platform capability, and rerun. Do not treat Error as
+    compliant merely to obtain a passing score.
+
+TROUBLESHOOTING
+    If a result says Requires elevation, Access denied, Unable to set proper privileges,
+    or that TPM status was not returned:
+
+        1. Open Windows Terminal or PowerShell with Run as administrator.
+        2. Rerun Get-EFEndpointSummary | Show-EFEndpointSummary -Detailed.
+        3. If access is still denied, check MDM, Group Policy, Defender tamper protection,
+           and application-control policy.
+
+    To inspect unavailable compliance controls without relying on terminal color:
+
+        $report = Get-EFComplianceReport
+        $report.Results |
+            Where-Object Status -in 'Error', 'NotApplicable' |
+            Format-Table ControlId, Status, Message -Wrap
+
+    If Secure Boot, TPM, BitLocker, Defender, or optional-feature data remains
+    NotApplicable after an elevated run, the capability may not exist on that Windows
+    edition, Server role, virtual machine, firmware mode, or hardware model. Use a
+    device-class-specific baseline when the absence is intentional.
+
+    If remediation reports VerificationFailed, check whether Group Policy, MDM, tamper
+    protection, or a service immediately restored the original state. Also inspect:
+
+        $result.Results |
+            Where-Object Outcome -in 'Failed','EvaluationFailed','VerificationFailed'
+        $result.RebootRequired
+        Get-EFPendingReboot
+
+    EndpointForge never restarts the device. After resolving the owner policy or
+    completing an approved restart, run Get-EFComplianceReport again.
+
+    If the module installs but does not import, inspect the discovered version and
+    effective execution policy:
+
+        Get-Module -ListAvailable EndpointForge | Select-Object Name,Version,ModuleBase
+        Get-ExecutionPolicy -List
+        Import-Module EndpointForge -Verbose
+
+    Follow organizational application-control and execution-policy requirements. Do not
+    bypass a centrally managed policy. Reinstalling a module does not override Group
+    Policy.
+
+BASELINES
+    EnterpriseRecommended is included. Get-EFBaseline loads built-in or custom JSON.
+    Test-EFBaseline validates by built-in name, JSON path, or pipeline InputObject without
+    evaluating the endpoint.
+
+    New-EFBaseline creates a valid starting file. Template accepts Starter,
+    EnterpriseRecommended, or AuditOnly. The command supports WhatIf and will not replace
+    an existing file unless Force is specified. For example:
+
+        New-EFBaseline -Name Contoso.Workstation -Template Starter `
+            -Path .\Contoso.Workstation.json
+        Test-EFBaseline -Path .\Contoso.Workstation.json
+
+    Validate after every edit and before deployment. Custom baselines can define
+    Registry, Service, FirewallProfile, Defender, WindowsOptionalFeature, BitLocker,
+    SecureBoot, and Tpm controls.
+
+LOGGING
+    File logging is disabled by default. Set-EFConfiguration can enable newline-delimited
+    JSON logging for the current process. Environment variables in LogPath are expanded
+    at write time.
+
+SEE ALSO
+    Show-EFMenu
+    Get-EFEndpointSummary
+    Show-EFEndpointSummary
+    Get-EFEndpointInventory
+    Get-EFEndpointHealth
+    Get-EFBaseline
+    New-EFBaseline
+    Test-EFBaseline
+    Test-EFEndpointCompliance
+    Get-EFComplianceReport
+    Get-EFRemediationPlan
+    Invoke-EFEndpointRemediation
+    Export-EFEndpointReport

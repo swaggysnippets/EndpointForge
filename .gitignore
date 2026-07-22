@@ -1,0 +1,7 @@
+artifacts/
+.build/
+TestResults/
+*.tmp
+*.log
+*.jsonl
+PSScriptAnalyzerResults.sarif

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EndpointForge baseline",
+  "type": "object",
+  "required": ["Name", "Version", "Description", "Controls"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "Name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "Version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$" },
+    "Description": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+    "Controls": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/control" }
+    }
+  },
+  "$defs": {
+    "control": {
+      "type": "object",
+      "required": ["Id", "Title", "Type", "Severity", "DesiredValue", "Remediable"],
+      "allOf": [
+        {
+          "if": { "properties": { "Type": { "const": "Registry" } } },
+          "then": { "required": ["Path", "ValueName"] }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "Service" } } },
+          "then": {
+            "required": ["Name"],
+            "anyOf": [
+              { "required": ["StartupType"] },
+              { "required": ["Status"] }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "FirewallProfile" } } },
+          "then": {
+            "required": ["Name"],
+            "properties": { "DesiredValue": { "type": "boolean" } }
+          }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "Defender" } } },
+          "then": {
+            "required": ["Property"],
+            "properties": { "DesiredValue": { "type": "boolean" } }
+          }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "WindowsOptionalFeature" } } },
+          "then": {
+            "required": ["Name"],
+            "properties": { "DesiredValue": { "enum": ["Enabled", "Disabled"] } }
+          }
+        },
+        {
+          "if": { "properties": { "Type": { "enum": ["BitLocker", "SecureBoot", "Tpm"] } } },
+          "then": { "properties": { "Remediable": { "const": false } } }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "SecureBoot" } } },
+          "then": { "properties": { "DesiredValue": { "type": "boolean" } } }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "Tpm" } } },
+          "then": {
+            "properties": {
+              "DesiredValue": {
+                "type": "object",
+                "required": ["TpmPresent", "TpmReady"],
+                "properties": {
+                  "TpmPresent": { "type": "boolean" },
+                  "TpmReady": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "Id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "Title": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "Description": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "Type": {
+          "enum": ["Registry", "Service", "FirewallProfile", "Defender", "WindowsOptionalFeature", "BitLocker", "SecureBoot", "Tpm"]
+        },
+        "Severity": { "enum": ["Low", "Medium", "High", "Critical"] },
+        "DesiredValue": {},
+        "Remediable": { "type": "boolean" },
+        "RequiresReboot": { "type": "boolean" },
+        "Path": { "type": "string", "pattern": "^(?:[Hh][Kk][Ll][Mm]|[Hh][Kk][Cc][Uu]):\\\\.+$" },
+        "ValueName": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "ValueType": { "enum": ["String", "ExpandString", "Binary", "DWord", "MultiString", "QWord"] },
+        "Name": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "StartupType": { "enum": ["Automatic", "Manual", "Disabled", ""] },
+        "Status": { "enum": ["Running", "Stopped", ""] },
+        "Property": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "MountPoint": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" }
+      }
+    }
+  }
+}

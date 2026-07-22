@@ -1,0 +1,123 @@
+{
+  "$schema": "./Baseline.schema.json",
+  "Name": "EnterpriseRecommended",
+  "Version": "1.0.0",
+  "Description": "A conservative Windows endpoint security baseline with guarded remediation for low-risk controls and audit-only reporting for hardware-backed protections.",
+  "Controls": [
+    {
+      "Id": "EF-FW-DOMAIN",
+      "Title": "Domain firewall profile is enabled",
+      "Description": "Requires Windows Firewall for the domain profile.",
+      "Type": "FirewallProfile",
+      "Severity": "Critical",
+      "Name": "Domain",
+      "DesiredValue": true,
+      "Remediable": true,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-FW-PRIVATE",
+      "Title": "Private firewall profile is enabled",
+      "Description": "Requires Windows Firewall for the private profile.",
+      "Type": "FirewallProfile",
+      "Severity": "Critical",
+      "Name": "Private",
+      "DesiredValue": true,
+      "Remediable": true,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-FW-PUBLIC",
+      "Title": "Public firewall profile is enabled",
+      "Description": "Requires Windows Firewall for the public profile.",
+      "Type": "FirewallProfile",
+      "Severity": "Critical",
+      "Name": "Public",
+      "DesiredValue": true,
+      "Remediable": true,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-UAC-ENABLED",
+      "Title": "User Account Control is enabled",
+      "Description": "Requires EnableLUA to remain enabled.",
+      "Type": "Registry",
+      "Severity": "Critical",
+      "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+      "ValueName": "EnableLUA",
+      "ValueType": "DWord",
+      "DesiredValue": 1,
+      "Remediable": true,
+      "RequiresReboot": true
+    },
+    {
+      "Id": "EF-DEFENDER-REALTIME",
+      "Title": "Microsoft Defender real-time protection is enabled",
+      "Description": "Requires real-time protection when Microsoft Defender is available.",
+      "Type": "Defender",
+      "Severity": "Critical",
+      "Property": "RealTimeProtectionEnabled",
+      "DesiredValue": true,
+      "Remediable": true,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-SMB1-DISABLED",
+      "Title": "SMB 1.0 optional feature is disabled",
+      "Description": "Requires the legacy SMB1 optional feature to be disabled when present.",
+      "Type": "WindowsOptionalFeature",
+      "Severity": "High",
+      "Name": "SMB1Protocol",
+      "DesiredValue": "Disabled",
+      "Remediable": true,
+      "RequiresReboot": true
+    },
+    {
+      "Id": "EF-WUA-NOT-DISABLED",
+      "Title": "Windows Update service is not disabled",
+      "Description": "Requires the Windows Update service to use manual trigger start.",
+      "Type": "Service",
+      "Severity": "High",
+      "Name": "wuauserv",
+      "StartupType": "Manual",
+      "Status": "",
+      "DesiredValue": "Manual",
+      "Remediable": true,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-BITLOCKER-OS",
+      "Title": "BitLocker protects the operating system volume",
+      "Description": "Audits BitLocker protection. Encryption is never enabled automatically.",
+      "Type": "BitLocker",
+      "Severity": "High",
+      "MountPoint": "%SystemDrive%",
+      "DesiredValue": "On",
+      "Remediable": false,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-SECUREBOOT",
+      "Title": "Secure Boot is enabled",
+      "Description": "Audits Secure Boot on supported UEFI devices.",
+      "Type": "SecureBoot",
+      "Severity": "High",
+      "DesiredValue": true,
+      "Remediable": false,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "EF-TPM-READY",
+      "Title": "Trusted Platform Module is present and ready",
+      "Description": "Audits TPM presence and readiness. TPM state is never changed automatically.",
+      "Type": "Tpm",
+      "Severity": "High",
+      "DesiredValue": {
+        "TpmPresent": true,
+        "TpmReady": true
+      },
+      "Remediable": false,
+      "RequiresReboot": false
+    }
+  ]
+}

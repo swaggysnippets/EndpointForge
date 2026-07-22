@@ -1,0 +1,32 @@
+{
+  "$schema": "../Data/Baseline.schema.json",
+  "Name": "Contoso.Workstation",
+  "Version": "1.0.0",
+  "Description": "Example organization baseline extending common endpoint controls.",
+  "Controls": [
+    {
+      "Id": "CONTOSO-FW-PUBLIC",
+      "Title": "Public firewall is enabled",
+      "Description": "Ensures the public network firewall profile is enabled.",
+      "Type": "FirewallProfile",
+      "Severity": "Critical",
+      "Name": "Public",
+      "DesiredValue": true,
+      "Remediable": true,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "CONTOSO-RDP-NLA",
+      "Title": "Remote Desktop requires Network Level Authentication",
+      "Description": "Configures UserAuthentication for the RDP-Tcp listener.",
+      "Type": "Registry",
+      "Severity": "High",
+      "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp",
+      "ValueName": "UserAuthentication",
+      "ValueType": "DWord",
+      "DesiredValue": 1,
+      "Remediable": true,
+      "RequiresReboot": false
+    }
+  ]
+}
