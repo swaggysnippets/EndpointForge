@@ -8,7 +8,8 @@ EndpointForge helps you check and maintain Windows computers without requiring y
 understand configuration frameworks. It answers four practical questions:
 
 - Does this computer look healthy?
-- Do important Windows settings match the selected checklist?
+- Do important settings, files, recent events, and network paths match the selected
+  checklist?
 - Which problems can EndpointForge safely preview and fix?
 - What changed between an earlier check and a later one?
 
@@ -33,13 +34,13 @@ The first screen is organized around what you want to accomplish:
 
 ```text
 EndpointForge - Windows computer helper
-Checks health and security, explains problems, and safely previews supported fixes.
+Checks health, settings, files, events, and connections; explains problems; and safely previews supported fixes.
 
 1. Check this computer now              [does not change Windows]
 2. Understand the latest results        [does not change Windows]
 3. Fix selected problems safely         [can change settings after approval]
 4. Save reports or compare checks       [creates files only when you choose Save]
-5. Check other computers                [read-only; advanced setup required]
+5. Check other computers                [no setting changes; TCP items contact named hosts]
 6. Change what EndpointForge checks     [does not change Windows]
 A. Tools for IT scripts and troubleshooting
 H. Help - explain every choice
@@ -52,7 +53,7 @@ fixes require a PowerShell window opened with **Run as administrator**.
 ## What EndpointForge can do
 
 - Run one read-only computer check that combines health, restart status, security
-  information, and a Windows settings checklist.
+  information, and an understandable checklist of things that should be true.
 - Explain results as **Looks good**, **Needs attention**, **Urgent attention**, or
   **Could not check everything**.
 - Explain why each built-in checklist item matters, how it is checked, what a supported
@@ -91,10 +92,10 @@ receipt and its recovery guidance with your approved change process.
 
 | Term | Plain-language meaning |
 |---|---|
-| Computer checkup | A read-only look at health and important Windows settings. |
-| Checklist | A list of Windows settings and their expected values. Selecting one does not apply it. |
+| Computer checkup | A non-changing look at health and checklist items. A TCP item can make one brief connection that may be recorded. |
+| Checklist | A list of things expected to be true, such as settings, files, recent events, or an available network service. Selecting one does not run it or apply it. |
 | Baseline | The script-facing name for a checklist. Existing commands keep this name for compatibility. |
-| Checklist item | One setting in a checklist. Script output calls it a control. |
+| Checklist item | One expectation in a checklist. Script output calls it a control. |
 | Matches | The current value could be read and equals the checklist value. Script output calls this compliant. |
 | Does not match | The current value was read and differs from the checklist. Script output calls this noncompliant. |
 | Could not check | Windows did not provide a definite answer. This is not treated as passing or fixed. |
@@ -258,7 +259,8 @@ that is not a like-for-like progress check.
 
 ## Check several computers without changing them
 
-`Get-EFFleetSummary` is strictly read-only:
+`Get-EFFleetSummary` never changes Windows settings or runs fixes. A checklist containing
+TCP items can still create the observable network activity explained below:
 
 ```powershell
 $fleet = Get-EFFleetSummary -ComputerName PC-101,PC-102
@@ -269,11 +271,26 @@ $fleet.Failures
 Before this works, each target computer must already:
 
 - allow PowerShell remoting under your organization's policy;
-- have EndpointForge 0.4.0 or later installed;
+- have EndpointForge 0.5.0 or later installed;
 - allow the connecting account to run the check.
 
 EndpointForge does not install the module remotely, enable WinRM, change TrustedHosts, or
 run fixes. Connection failures are returned alongside successful computer results.
+
+A checklist with `TcpPort` items is still read-only, but it is not invisible: every remote
+computer will briefly try the named connection, and the destination, firewall, or network
+monitoring tools may record each attempt. Fleet checks block these items until you review
+the checklist and add `-AllowNetworkChecks`:
+
+```powershell
+Get-EFFleetSummary `
+    -ComputerName PC-101,PC-102 `
+    -Baseline .\checklists\Contoso.EverydayChecks.json `
+    -AllowNetworkChecks
+```
+
+No application data is sent. A successful connection proves only that a TCP connection
+could be opened; it does not test HTTPS, sign-in, or the application itself.
 
 Use a credential only when your approved environment requires one:
 
@@ -307,13 +324,27 @@ New-EFBaseline `
     -Path .\checklists\Contoso.Workstation.json
 ```
 
+To start with the four everyday, report-only examples, use the `EverydayChecks` template:
+
+```powershell
+New-EFBaseline `
+    -Name Contoso.EverydayChecks `
+    -Template EverydayChecks `
+    -Path .\checklists\Contoso.EverydayChecks.json
+```
+
+Replace every sample file path, search text, event source and ID, and server name before
+running it. The packaged [EverydayChecks example](examples/EverydayChecks.json) contains
+plain-language explanations beside every property.
+
 Validate it without checking or changing Windows:
 
 ```powershell
 Test-EFBaseline -Path .\checklists\Contoso.Workstation.json -PassThru
 ```
 
-Use it for a read-only check:
+Use it for a non-changing check. If it contains TCP items, those named connection attempts
+can be recorded by the destination or network:
 
 ```powershell
 Get-EFEndpointSummary -Baseline .\checklists\Contoso.Workstation.json -NoProgress
@@ -325,13 +356,17 @@ uses them.
 
 ### Checklist item types
 
-EndpointForge 0.4.0 understands these types:
+EndpointForge 0.5.0 understands these types:
 
 - `Registry`
 - `Service`
 - `FirewallProfile`
 - `Defender`
 - `WindowsOptionalFeature`
+- `FileExists` (report-only)
+- `FileContainsText` (report-only)
+- `WindowsEvent` (report-only)
+- `TcpPort` (report-only; makes one observable connection attempt)
 - `BitLocker` (report-only)
 - `SecureBoot` (report-only)
 - `Tpm` (report-only)
@@ -339,6 +374,34 @@ EndpointForge 0.4.0 understands these types:
 Optional explanation fields are `WhyItMatters`, `HowChecked`, `WhatWouldChange`,
 `ManualAction`, `SafetyNotes`, and `RecoveryGuidance`. The included JSON schema documents
 the complete structure.
+
+The four everyday types all use a Boolean `DesiredValue`: `true` means the named evidence
+should be present or the connection should succeed; `false` means it should not. They must
+set `Remediable` to `false`. EndpointForge reports the answer and manual guidance, but it
+never creates or removes a file, edits a log, writes an event, opens a firewall rule, or
+tries to repair a network service.
+
+| Type | What it answers | Main properties and limits |
+|---|---|---|
+| `FileExists` | Does this exact local file exist? | `Path` is required. Use a full local drive path, optionally with an environment variable such as `%ProgramData%`. Relative paths, network shares, mapped network drives, wildcards, alternate data streams, and paths through links are rejected. A folder does not count as a file. |
+| `FileContainsText` | Is this exact text near the end of one local text file? | `Path` and `Text` are required, and the same safe local-path rules apply. `TailLines` defaults to 2,000 and accepts 1 through 10,000. `CaseSensitive` defaults to `false`. `Encoding` defaults to `Utf8` and also accepts `Unicode`, `BigEndianUnicode`, or `Ascii`. The text is an ordinary literal string, not a wildcard or regular expression. |
+| `WindowsEvent` | Were enough matching Windows events recorded recently? | `LogName` and `EventIds` are required. `EventIds` can be one whole number from 0 through 65,535 or a list of up to 64 unique IDs. `ProviderName` can narrow the source. `LookbackMinutes` defaults to 60 and accepts up to 10,080 (seven days). `MinimumCount` defaults to 1 and accepts up to 1,000. Use IDs documented for the selected log and source. Protected logs can require **Run as administrator**. |
+| `TcpPort` | Can this computer open a TCP connection to one exact host and port? | `HostName` and `Port` are required. `TimeoutMilliseconds` defaults to 3,000 and accepts 100 through 10,000. URLs, paths, and wildcards are rejected. One checklist can contain at most 32 TCP items. |
+
+`FileContainsText` reads only the requested tail, stops with **Could not check** if the file
+changes during the read, and refuses a selected tail larger than 8,388,608 decoded
+characters. It returns only whether the requested text was found; matching lines are not
+placed in results. `WindowsEvent` returns a Boolean answer and bounded count summary;
+event messages and event data are not placed in results. The checklist file itself still
+contains file paths, search text, event sources, and destinations. Results and reports can
+show which paths and destinations were checked and whether they matched. Protect all of
+these files according to your organization's data rules.
+
+A missing file is a definite `false` answer for `FileExists`. A missing or unreadable text
+file is instead **Could not check**, because EndpointForge has no trustworthy text answer.
+An unavailable or protected event log is also **Could not check**. For `TcpPort`, a refused
+or timed-out connection is `false`; a host name that cannot be resolved is **Could not
+check**. This distinction prevents missing evidence from being treated as success.
 
 ## Commands for scripts
 
@@ -352,7 +415,7 @@ with `Show`.
 | `Get-EFEndpointSummary` | Combines health, inventory, security, and checklist results. | No |
 | `Show-EFEndpointSummary` | Displays a summary in plain language. | No |
 | `Compare-EFEndpointSummary` | Compares earlier and later checks. | No |
-| `Get-EFFleetSummary` | Runs read-only checks on prepared remote computers. | No |
+| `Get-EFFleetSummary` | Runs non-changing checks on prepared remote computers; approved TCP items make observable connections. | No setting change |
 | `Get-EFRemediationPlan` | Separates supported fixes, manual review, and unavailable checks. | No |
 | `Invoke-EFEndpointRemediation` | Previews or applies selected supported fixes. | Yes, unless `-WhatIf` |
 | `Export-EFEndpointReport` | Writes HTML, JSON, CSV, or CLIXML. | Writes a file |
@@ -419,7 +482,7 @@ owner, and make the lasting change through that approved system.
 ### Another computer cannot be reached
 
 Confirm the name, network path, remoting policy, connecting account permission, and that
-EndpointForge 0.4.0 or later is installed on the target. The fleet command will not change
+EndpointForge 0.5.0 or later is installed on the target. The fleet command will not change
 those prerequisites for you.
 
 ### The menu has no color

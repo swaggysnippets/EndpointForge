@@ -1,20 +1,25 @@
 function Get-EFEndpointSummary {
     <#
     .SYNOPSIS
-    Gets one combined computer health and Windows settings checkup.
+    Gets one combined Windows computer checkup.
 
     .DESCRIPTION
     Provides the recommended first check for EndpointForge. It reads computer details,
-    everyday health, restart status, and important Windows settings, then explains what
-    needs attention. It does not change Windows.
+    everyday health, restart status, and each item in the selected checklist, then
+    explains what needs attention. A checklist can include settings, exact local files,
+    literal text near the end of a log, recent Windows event IDs, and named TCP
+    connections. The command does not apply a fix or change Windows. A TcpPort item does
+    make one real, observable connection attempt and sends no application data.
 
-    EndpointForge calls the Windows settings checklist a baseline in script properties so
-    existing automation remains compatible. No knowledge of configuration frameworks is
-    required to use the returned guidance.
+    EndpointForge calls the checklist a baseline in script properties so existing
+    automation remains compatible. No knowledge of configuration frameworks is required
+    to use the returned guidance. Matching log lines, event messages, and event data are
+    not included in results.
 
     .PARAMETER Baseline
-    The checklist of expected Windows settings: a built-in name, JSON path, or validated
-    checklist object.
+    The list of things expected to be true: a built-in name, JSON path, or validated
+    checklist object. Review custom paths, event queries, hosts, and ports before running
+    it.
 
     .PARAMETER ControlId
     Limits the check to selected checklist item IDs.
@@ -36,6 +41,11 @@ function Get-EFEndpointSummary {
 
     .EXAMPLE
     Get-EFEndpointSummary -NoProgress | Show-EFEndpointSummary -Detailed
+
+    .EXAMPLE
+    Get-EFEndpointSummary -Baseline .\Contoso.EverydayChecks.json -NoProgress
+
+    Includes the custom file, text, event, and network checks in the computer checkup.
 
     .OUTPUTS
     EndpointForge.EndpointSummary
@@ -214,11 +224,17 @@ function Get-EFEndpointSummary {
             @{ Expression = {
                 switch ($_.Severity) { 'Critical' { 0 } 'High' { 1 } 'Warning' { 2 } 'Medium' { 3 } 'Low' { 4 } default { 5 } }
             } }, Source, Id)
+        $supportedFixCount = @($compliance.Results | Where-Object {
+            $_.Status -eq 'NonCompliant' -and [bool]$_.Remediable
+        }).Count
         $nextStep = if ($compliance.ErrorCount -gt 0) {
-            'Some settings could not be checked. Open PowerShell with Run as Administrator (an elevated session), then run the computer checkup again.'
+            'Some checklist items could not be checked. Review their messages; if Windows blocked access, open PowerShell with Run as Administrator (an elevated window) and run the checkup again.'
+        }
+        elseif ($supportedFixCount -gt 0) {
+            'Open the safe fix assistant to review supported fixes. It will show a preview before any change can be approved.'
         }
         elseif ($compliance.NonCompliantCount -gt 0) {
-            'Open the safe fix assistant to review supported fixes. It will show a preview before any change can be approved.'
+            'Review the checklist details and follow the approved manual guidance. These items are report-only, so EndpointForge will not change them automatically.'
         }
         elseif ($health.Status -ne 'Healthy') {
             'Review the items needing attention and follow the plain-language guidance before the next checkup.'
@@ -259,7 +275,8 @@ function Get-EFEndpointSummary {
             DiskFreePercent     = $inventory.SystemDriveFreePercent
             Security            = $security
             NextStep            = $nextStep
-            AutomationNextStep  = if ($compliance.NonCompliantCount -gt 0) { 'Get-EFRemediationPlan' } elseif ($compliance.ErrorCount -gt 0) { 'Get-EFEndpointSummary -NoProgress' } else { $null }
+            SupportedFixCount   = $supportedFixCount
+            AutomationNextStep  = if ($supportedFixCount -gt 0) { 'Get-EFRemediationPlan' } elseif ($compliance.ErrorCount -gt 0) { 'Get-EFEndpointSummary -NoProgress' } else { $null }
             CorrelationId       = $correlationId
             StartedAtUtc        = [DateTime]::UtcNow.Subtract($timer.Elapsed)
             CompletedAtUtc      = [DateTime]::UtcNow

@@ -22,7 +22,12 @@
       "allOf": [
         {
           "if": { "properties": { "Type": { "const": "Registry" } } },
-          "then": { "required": ["Path", "ValueName"] }
+          "then": {
+            "required": ["Path", "ValueName"],
+            "properties": {
+              "Path": { "pattern": "^(?:[Hh][Kk][Ll][Mm]|[Hh][Kk][Cc][Uu]):\\\\.+$" }
+            }
+          }
         },
         {
           "if": { "properties": { "Type": { "const": "Service" } } },
@@ -56,8 +61,43 @@
           }
         },
         {
-          "if": { "properties": { "Type": { "enum": ["BitLocker", "SecureBoot", "Tpm"] } } },
+          "if": {
+            "properties": {
+              "Type": {
+                "enum": ["FileExists", "FileContainsText", "WindowsEvent", "TcpPort", "BitLocker", "SecureBoot", "Tpm"]
+              }
+            }
+          },
           "then": { "properties": { "Remediable": { "const": false } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "Type": { "enum": ["FileExists", "FileContainsText", "WindowsEvent", "TcpPort"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "DesiredValue": { "type": "boolean" },
+              "RequiresReboot": { "const": false }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "FileExists" } } },
+          "then": { "required": ["Path"] }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "FileContainsText" } } },
+          "then": { "required": ["Path", "Text"] }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "WindowsEvent" } } },
+          "then": { "required": ["LogName", "EventIds"] }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "TcpPort" } } },
+          "then": { "required": ["HostName", "Port"] }
         },
         {
           "if": { "properties": { "Type": { "const": "SecureBoot" } } },
@@ -90,20 +130,115 @@
         "SafetyNotes": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "RecoveryGuidance": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "Type": {
-          "enum": ["Registry", "Service", "FirewallProfile", "Defender", "WindowsOptionalFeature", "BitLocker", "SecureBoot", "Tpm"]
+          "enum": [
+            "Registry", "Service", "FirewallProfile", "Defender", "WindowsOptionalFeature",
+            "FileExists", "FileContainsText", "WindowsEvent", "TcpPort",
+            "BitLocker", "SecureBoot", "Tpm"
+          ]
         },
         "Severity": { "enum": ["Low", "Medium", "High", "Critical"] },
         "DesiredValue": {},
         "Remediable": { "type": "boolean" },
         "RequiresReboot": { "type": "boolean" },
-        "Path": { "type": "string", "pattern": "^(?:[Hh][Kk][Ll][Mm]|[Hh][Kk][Cc][Uu]):\\\\.+$" },
+        "Path": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000-\\u001F\\u007F]+$",
+          "description": "An exact registry path or local file path, depending on the checklist item type. File paths cannot use wildcards, relative paths, or network shares."
+        },
         "ValueName": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "ValueType": { "enum": ["String", "ExpandString", "Binary", "DWord", "MultiString", "QWord"] },
         "Name": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "StartupType": { "enum": ["Automatic", "Manual", "Disabled", ""] },
         "Status": { "enum": ["Running", "Stopped", ""] },
         "Property": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
-        "MountPoint": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" }
+        "MountPoint": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "Text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000-\\u001F\\u007F]+$",
+          "description": "Exact text to find. It is treated as ordinary text, not a regular expression or wildcard."
+        },
+        "TailLines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 2000,
+          "description": "Maximum number of lines to read from the end of the text file."
+        },
+        "CaseSensitive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether uppercase and lowercase letters must match exactly."
+        },
+        "Encoding": {
+          "enum": ["Utf8", "Unicode", "BigEndianUnicode", "Ascii"],
+          "default": "Utf8",
+          "description": "How the text file is encoded. Utf8 is used when this field is omitted."
+        },
+        "LogName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$",
+          "description": "Exact Windows event log name, such as Application or System."
+        },
+        "ProviderName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$",
+          "description": "Optional exact event source. Event IDs usually have meaning only together with their source."
+        },
+        "EventIds": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 65535 },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": { "type": "integer", "minimum": 0, "maximum": 65535 }
+            }
+          ],
+          "description": "One event ID or a list of event IDs. A match for any listed ID is counted."
+        },
+        "LookbackMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10080,
+          "default": 60,
+          "description": "How far back to search, from one minute through seven days."
+        },
+        "MinimumCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 1,
+          "description": "Minimum number of matching events needed for the answer to be true."
+        },
+        "HostName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[^\\u0000-\\u0020\\u007F/\\\\*?\\[\\]]+$",
+          "description": "One exact DNS name or IP address. Do not include a URL scheme, path, or wildcard."
+        },
+        "Port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "TCP port number to contact."
+        },
+        "TimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000,
+          "default": 3000,
+          "description": "Maximum time for the single TCP connection attempt."
+        }
       }
     }
   }

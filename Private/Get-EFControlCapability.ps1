@@ -68,6 +68,27 @@ function Get-EFControlCapability {
             $howChecked = 'Reads whether the named optional Windows feature is enabled or disabled.'
             $whatWouldChange = 'Enables or disables only the named optional Windows feature. EndpointForge never restarts the PC automatically.'
         }
+        'FileExists' {
+            $checkCommands = @('Get-Item')
+            $howChecked = 'Looks for one exact file on a local Windows drive. Environment variables such as %ProgramData% are expanded; folders, wildcards, relative paths, and network paths are not accepted.'
+            $whatWouldChange = 'Nothing. EndpointForge reports whether the file exists but never creates, deletes, opens, or edits it.'
+        }
+        'FileContainsText' {
+            $checkCommands = @('Get-Item')
+            $howChecked = 'Reads a limited number of lines from the end of one local text file and looks for exact ordinary text. Matching lines and file contents are never returned in the result.'
+            $whatWouldChange = 'Nothing. EndpointForge reads the text file but never edits, clears, rotates, or copies it.'
+        }
+        'WindowsEvent' {
+            $checkCommands = @('Get-WinEvent')
+            $eventLogName = [string](Get-EFPropertyValue -InputObject $Control -Name 'LogName')
+            $administratorRecommendedForCheck = $eventLogName -eq 'Security'
+            $howChecked = 'Counts matching event IDs in one Windows event log during a limited time window. Event messages and event data are never returned in the result.'
+            $whatWouldChange = 'Nothing. EndpointForge reads the event log but never writes to it or clears it.'
+        }
+        'TcpPort' {
+            $howChecked = 'Opens one time-limited TCP connection to the exact host and port, then closes it without sending application data. A successful connection does not prove that the application itself is healthy.'
+            $whatWouldChange = 'Nothing on this computer. The destination or network monitoring tools may record the brief connection attempt.'
+        }
         'BitLocker' {
             $checkCommands = @('Get-BitLockerVolume')
             $administratorRecommendedForCheck = $true

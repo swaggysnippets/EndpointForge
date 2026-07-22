@@ -4,18 +4,24 @@ function Show-EFEndpointSummary {
     Shows a plain-language computer checkup in the terminal.
 
     .DESCRIPTION
-    Explains computer health, important Windows settings, items needing attention, and a
-    suggested next step. It is designed for someone who does not know PowerShell or
-    configuration-management terminology. Showing a result never changes Windows.
+    Explains computer health, checklist results, items needing attention, and a suggested
+    next step. Checklist items can cover Windows settings, exact local files, literal
+    text near the end of a log, recent Windows event IDs, or a named TCP connection. It
+    is designed for someone who does not know PowerShell or configuration-management
+    terminology. Rendering an existing result never changes Windows or repeats its
+    checks.
 
-    A checklist is simply a list of Windows settings and their expected values. Scripts
-    call that checklist a baseline, but the terminal display uses everyday language.
+    A checklist is a list of things expected to be true. Scripts call it a baseline, but
+    the terminal display uses everyday language. When this command collects a new result
+    itself, a TcpPort item makes one observable connection attempt to the named
+    destination and sends no application data.
 
     .PARAMETER InputObject
     A summary returned by Get-EFEndpointSummary.
 
     .PARAMETER Baseline
-    The checklist used when the command collects its own summary.
+    The checklist used when the command collects its own summary. Review custom paths,
+    event queries, hosts, and ports before running it.
 
     .PARAMETER ControlId
     Limits the check to selected checklist item IDs when the command collects a summary.
@@ -159,11 +165,11 @@ function Show-EFEndpointSummary {
         & $writeLine ''
         & $writeLine 'EndpointForge computer checkup' ([ConsoleColor]::Cyan)
         & $writeLine ('=' * 72) ([ConsoleColor]::DarkGray)
-        & $writeLine 'This check read information only. It did not change Windows.' ([ConsoleColor]::DarkGray)
+        & $writeLine 'This check did not change Windows settings. TCP checklist items, when present, made brief outbound connections without sending application data.' ([ConsoleColor]::DarkGray)
         & $writeLine ("{0}  |  {1}  |  Build {2}" -f $summary.ComputerName, $summary.OperatingSystem, $summary.OperatingSystemBuild)
         & $writeLine ("OVERALL RESULT        {0}  -  Score {1}/100" -f (& $friendlyStatus $summary.OverallStatus), $summary.Score) $statusColor
         & $writeLine ("Computer health       {0}  -  Score {1}/100" -f (& $friendlyStatus $summary.HealthStatus), $summary.HealthScore)
-        & $writeLine ("Recommended settings  {0}  -  Score {1}/100 for settings Windows could answer" -f (& $friendlyStatus $summary.ComplianceStatus), $summary.ComplianceScore)
+        & $writeLine ("Checklist results     {0}  -  Score {1}/100 for items Windows could answer" -f (& $friendlyStatus $summary.ComplianceStatus), $summary.ComplianceScore)
         & $writeLine ("Check completeness    {0}  -  {1}% checked" -f (& $friendlyStatus $summary.DataStatus), $summary.CoveragePercent)
         & $writeLine ("Restart waiting       {0}" -f $(if ($summary.IsRebootPending) { 'Yes' } else { 'No' }))
 
@@ -206,7 +212,7 @@ function Show-EFEndpointSummary {
                 }
             }
             if (-not $Detailed -and $findings.Count -gt 5) {
-                & $writeLine ("  ... {0} more. Use the detailed view to explain every item." -f ($findings.Count - 5)) ([ConsoleColor]::DarkGray)
+                & $writeLine ("  ... {0} more. Use the detailed view to explain every problem." -f ($findings.Count - 5)) ([ConsoleColor]::DarkGray)
             }
         }
         if ($summary.UnknownCount -gt 0) {

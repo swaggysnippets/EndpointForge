@@ -23,11 +23,11 @@ function Write-EFMenuReadiness {
     Write-EFMenuLine -Text ('-' * [math]::Min(72, $Width)) -NoColor:$NoColor -Width $Width
     Write-EFMenuLine -Text ("[{0}] {1}" -f $status.ToUpperInvariant(), [string]$Readiness.Summary) `
         -Color $statusColor -NoColor:$NoColor -Width $Width
-    Write-EFMenuLine -Text 'Checking only reads Windows settings. It does not change this PC.' `
+    Write-EFMenuLine -Text 'Checking does not change this PC. A TCP item can make one brief network connection that may be recorded.' `
         -Color Green -NoColor:$NoColor -Width $Width
     Write-EFMenuLine -Text ("Checklist: {0} {1} ({2} checks)" -f $Readiness.ChecklistName, `
         $Readiness.ChecklistVersion, $Readiness.ControlCount) -NoColor:$NoColor -Width $Width
-    Write-EFMenuLine -Text 'A checklist is simply the list of expected Windows settings that this PC is compared with.' `
+    Write-EFMenuLine -Text 'A checklist is a list of things expected to be true, such as settings, files, recent events, and network availability.' `
         -NoColor:$NoColor -Width $Width -Indent 2
 
     foreach ($check in @($Readiness.Checks)) {

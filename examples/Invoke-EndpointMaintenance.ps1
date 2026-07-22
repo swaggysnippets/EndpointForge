@@ -20,7 +20,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Import-Module EndpointForge -MinimumVersion 0.4.0
+Import-Module EndpointForge -MinimumVersion 0.5.0
 
 Set-EFConfiguration -LogPath "$env:ProgramData\EndpointForge\endpointforge.jsonl" -LogLevel Information
 

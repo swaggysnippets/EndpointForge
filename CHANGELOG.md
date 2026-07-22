@@ -4,6 +4,28 @@ All notable changes use the structure from Keep a Changelog, and versions follow
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-22
+
+### Added
+
+- Four beginner-friendly, report-only checklist item types: exact local file presence (`FileExists`), literal text near the end of a log (`FileContainsText`), recent Windows event IDs (`WindowsEvent`), and a bounded TCP connection (`TcpPort`).
+- An edit-before-use `EverydayChecks` template and `examples/EverydayChecks.json` with plain-language purpose, safety, manual-action, and recovery guidance.
+- Readiness, validation, menu, report, comparison, and fleet support for the new Boolean checklist results.
+- Explicit `-AllowNetworkChecks` consent before `TcpPort` items can fan out from remote computers.
+
+### Changed
+
+- Checklist explanations now cover things expected to be true, not only Windows settings, and describe how every item is checked before it is run.
+- Report-only differences lead to manual guidance instead of incorrectly directing beginners to the safe-fix assistant.
+- Fleet targets carrying the new checklist types now require EndpointForge 0.5.0 or later.
+
+### Safety
+
+- File targets are limited to exact local drive paths and reject wildcards, relative paths, providers, alternate data streams, UNC paths, mapped network drives, and existing reparse-point paths.
+- Text searches use literal ordinal matching, read at most 10,000 tail lines, and never include matching lines or the requested text in results.
+- Event checks return only a Boolean and count summary; event messages, XML, and insertion data are not returned.
+- TCP checks make one time-limited connection, send no application data, treat DNS failure as an error, and explain that destinations may record the attempt.
+
 ## [0.4.0] - 2026-07-21
 
 ### Added

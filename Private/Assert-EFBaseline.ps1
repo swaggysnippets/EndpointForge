@@ -21,6 +21,14 @@ function Assert-EFBaseline {
             throw [System.IO.InvalidDataException]::new("$Label must not contain control characters.")
         }
     }
+    $testInteger = {
+        param([AllowNull()][object]$Value)
+
+        return $Value -is [byte] -or $Value -is [sbyte] -or
+            $Value -is [int16] -or $Value -is [uint16] -or
+            $Value -is [int32] -or $Value -is [uint32] -or
+            $Value -is [int64] -or $Value -is [uint64]
+    }
 
     if ([string]::IsNullOrWhiteSpace($name)) {
         throw [System.IO.InvalidDataException]::new('A baseline must define a non-empty Name.')
@@ -46,9 +54,11 @@ function Assert-EFBaseline {
 
     $supportedTypes = @(
         'Registry', 'Service', 'FirewallProfile', 'Defender', 'WindowsOptionalFeature',
+        'FileExists', 'FileContainsText', 'WindowsEvent', 'TcpPort',
         'BitLocker', 'SecureBoot', 'Tpm'
     )
     $ids = @{}
+    $tcpControlCount = 0
     foreach ($control in $controls) {
         $id = [string](Get-EFPropertyValue -InputObject $control -Name 'Id')
         $type = [string](Get-EFPropertyValue -InputObject $control -Name 'Type')
@@ -77,10 +87,19 @@ function Assert-EFBaseline {
         foreach ($textProperty in @(
             'Id', 'Title', 'Description', 'WhyItMatters', 'HowChecked', 'WhatWouldChange',
             'ManualAction', 'SafetyNotes', 'RecoveryGuidance', 'Type', 'Severity', 'Path',
-            'ValueName', 'Name', 'Property', 'StartupType', 'Status', 'MountPoint'
+            'ValueName', 'Name', 'Property', 'StartupType', 'Status', 'MountPoint', 'Text',
+            'LogName', 'ProviderName', 'HostName'
         )) {
             if (Test-EFPropertyPresent -InputObject $control -Name $textProperty) {
                 & $assertSafeText (Get-EFPropertyValue -InputObject $control -Name $textProperty) "Control '$id' $textProperty"
+            }
+        }
+        foreach ($strictStringProperty in @('Path', 'Text', 'LogName', 'ProviderName', 'HostName')) {
+            if ((Test-EFPropertyPresent -InputObject $control -Name $strictStringProperty) -and
+                (Get-EFPropertyValue -InputObject $control -Name $strictStringProperty) -isnot [string]) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' $strictStringProperty must be a JSON string."
+                )
             }
         }
         if (-not (Test-EFPropertyPresent -InputObject $control -Name 'DesiredValue')) {
@@ -98,6 +117,10 @@ function Assert-EFBaseline {
             (Get-EFPropertyValue -InputObject $control -Name 'RequiresReboot') -isnot [bool]) {
             throw [System.IO.InvalidDataException]::new("Control '$id' RequiresReboot must be a JSON Boolean.")
         }
+        if ($type -in @('FileExists', 'FileContainsText', 'WindowsEvent', 'TcpPort') -and
+            [bool](Get-EFPropertyValue -InputObject $control -Name 'RequiresReboot' -Default $false)) {
+            throw [System.IO.InvalidDataException]::new("Control '$id' of type '$type' is report-only and cannot require a restart.")
+        }
         if ([bool]$remediableValue -and $type -notin @('Registry', 'Service', 'FirewallProfile', 'Defender', 'WindowsOptionalFeature')) {
             throw [System.IO.InvalidDataException]::new("Control '$id' of type '$type' is audit-only and cannot set Remediable to true.")
         }
@@ -108,6 +131,10 @@ function Assert-EFBaseline {
             'FirewallProfile'        { @('Name') }
             'Defender'               { @('Property') }
             'WindowsOptionalFeature' { @('Name') }
+            'FileExists'             { @('Path') }
+            'FileContainsText'       { @('Path', 'Text') }
+            'WindowsEvent'           { @('LogName') }
+            'TcpPort'                { @('HostName') }
             default                  { @() }
         }
         foreach ($requiredProperty in $requiredByType) {
@@ -131,7 +158,8 @@ function Assert-EFBaseline {
         }
 
         $desiredValue = Get-EFPropertyValue -InputObject $control -Name 'DesiredValue'
-        if ($type -in @('FirewallProfile', 'SecureBoot') -and $desiredValue -isnot [bool]) {
+        if ($type -in @('FirewallProfile', 'SecureBoot', 'FileExists', 'FileContainsText', 'WindowsEvent', 'TcpPort') -and
+            $desiredValue -isnot [bool]) {
             throw [System.IO.InvalidDataException]::new("Control '$id' DesiredValue must be a JSON Boolean for type '$type'.")
         }
         if ($type -eq 'Defender') {
@@ -164,6 +192,110 @@ function Assert-EFBaseline {
                 $desiredValue -is [single] -or $desiredValue -is [double] -or $desiredValue -is [decimal]
             if ($valueType -in @('DWord', 'QWord') -and -not $isNumeric) {
                 throw [System.IO.InvalidDataException]::new("Registry control '$id' DesiredValue must be numeric for ValueType '$valueType'.")
+            }
+        }
+        if ($type -in @('FileExists', 'FileContainsText')) {
+            $filePath = [string](Get-EFPropertyValue -InputObject $control -Name 'Path')
+            try {
+                $null = Resolve-EFLocalFilePath -Path $filePath
+            }
+            catch {
+                throw [System.IO.InvalidDataException]::new("Control '$id' has an unsafe file Path. $($_.Exception.Message)", $_.Exception)
+            }
+        }
+        if ($type -eq 'FileContainsText') {
+            $text = [string](Get-EFPropertyValue -InputObject $control -Name 'Text')
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' must define non-empty literal Text to find in the file.")
+            }
+            if ($text.Length -gt 1024) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' Text cannot be longer than 1,024 characters.")
+            }
+            if (Test-EFPropertyPresent -InputObject $control -Name 'TailLines') {
+                $tailLines = Get-EFPropertyValue -InputObject $control -Name 'TailLines'
+                if (-not (& $testInteger $tailLines) -or [decimal]$tailLines -lt 1 -or [decimal]$tailLines -gt 10000) {
+                    throw [System.IO.InvalidDataException]::new("Control '$id' TailLines must be a whole number from 1 through 10,000.")
+                }
+            }
+            if ((Test-EFPropertyPresent -InputObject $control -Name 'CaseSensitive') -and
+                (Get-EFPropertyValue -InputObject $control -Name 'CaseSensitive') -isnot [bool]) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' CaseSensitive must be a JSON Boolean.")
+            }
+            $encoding = [string](Get-EFPropertyValue -InputObject $control -Name 'Encoding' -Default 'Utf8')
+            if ($encoding -notin @('Utf8', 'Unicode', 'BigEndianUnicode', 'Ascii')) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' Encoding must be Utf8, Unicode, BigEndianUnicode, or Ascii."
+                )
+            }
+        }
+        if ($type -eq 'WindowsEvent') {
+            if (-not (Test-EFPropertyPresent -InputObject $control -Name 'EventIds')) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' of type 'WindowsEvent' must define EventIds.")
+            }
+            $logName = [string](Get-EFPropertyValue -InputObject $control -Name 'LogName')
+            $providerName = [string](Get-EFPropertyValue -InputObject $control -Name 'ProviderName')
+            if ($logName.Length -gt 256 -or [System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters($logName)) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' LogName must name one exact Windows event log and cannot contain wildcards.")
+            }
+            if ($providerName.Length -gt 256 -or
+                [System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters($providerName)) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' ProviderName must name one exact event source and cannot contain wildcards.")
+            }
+            if ((Test-EFPropertyPresent -InputObject $control -Name 'ProviderName') -and
+                [string]::IsNullOrWhiteSpace($providerName)) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' ProviderName cannot be empty when it is included.")
+            }
+
+            $eventIds = @(Get-EFPropertyValue -InputObject $control -Name 'EventIds')
+            if ($eventIds.Count -lt 1 -or $eventIds.Count -gt 64) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' EventIds must contain from 1 through 64 event IDs.")
+            }
+            $seenEventIds = @{}
+            foreach ($eventId in $eventIds) {
+                if (-not (& $testInteger $eventId) -or [decimal]$eventId -lt 0 -or [decimal]$eventId -gt 65535) {
+                    throw [System.IO.InvalidDataException]::new("Control '$id' EventIds values must be whole numbers from 0 through 65,535.")
+                }
+                if ($seenEventIds.ContainsKey([string]$eventId)) {
+                    throw [System.IO.InvalidDataException]::new("Control '$id' EventIds contains duplicate value '$eventId'.")
+                }
+                $seenEventIds[[string]$eventId] = $true
+            }
+            foreach ($propertyRule in @(
+                @{ Name = 'LookbackMinutes'; Default = 60; Minimum = 1; Maximum = 10080 },
+                @{ Name = 'MinimumCount'; Default = 1; Minimum = 1; Maximum = 1000 }
+            )) {
+                $propertyValue = Get-EFPropertyValue -InputObject $control -Name $propertyRule.Name -Default $propertyRule.Default
+                if (-not (& $testInteger $propertyValue) -or [decimal]$propertyValue -lt $propertyRule.Minimum -or
+                    [decimal]$propertyValue -gt $propertyRule.Maximum) {
+                    throw [System.IO.InvalidDataException]::new(
+                        "Control '$id' $($propertyRule.Name) must be a whole number from $($propertyRule.Minimum) through $($propertyRule.Maximum)."
+                    )
+                }
+            }
+        }
+        if ($type -eq 'TcpPort') {
+            $tcpControlCount++
+            if ($tcpControlCount -gt 32) {
+                throw [System.IO.InvalidDataException]::new('A checklist cannot contain more than 32 TcpPort items.')
+            }
+            $hostName = [string](Get-EFPropertyValue -InputObject $control -Name 'HostName')
+            if ($hostName.Length -gt 255 -or $hostName -match '[\s/\\]' -or $hostName -match '://' -or
+                [System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters($hostName) -or
+                [Uri]::CheckHostName($hostName) -eq [UriHostNameType]::Unknown) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' HostName must be one exact DNS name or IP address, without a URL scheme, path, whitespace, or wildcard."
+                )
+            }
+            if (-not (Test-EFPropertyPresent -InputObject $control -Name 'Port')) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' of type 'TcpPort' must define Port.")
+            }
+            $port = Get-EFPropertyValue -InputObject $control -Name 'Port'
+            if (-not (& $testInteger $port) -or [decimal]$port -lt 1 -or [decimal]$port -gt 65535) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' Port must be a whole number from 1 through 65,535.")
+            }
+            $timeout = Get-EFPropertyValue -InputObject $control -Name 'TimeoutMilliseconds' -Default 3000
+            if (-not (& $testInteger $timeout) -or [decimal]$timeout -lt 100 -or [decimal]$timeout -gt 10000) {
+                throw [System.IO.InvalidDataException]::new("Control '$id' TimeoutMilliseconds must be a whole number from 100 through 10,000.")
             }
         }
         if ($type -eq 'BitLocker' -and [string]$desiredValue -ne 'On') {

@@ -1,13 +1,19 @@
 function Get-EFComplianceReport {
     <#
     .SYNOPSIS
-    Checks this computer against a Windows settings checklist.
+    Checks this computer against a selected checklist without applying fixes.
 
     .DESCRIPTION
-    Reads each selected Windows setting and compares it with the expected value in a
-    checklist. It does not change Windows. In script output, a checklist is called a
-    baseline and each checklist item is called a control. Those names are retained so
-    existing PowerShell automation remains compatible.
+    Reads each selected item and compares it with the expected answer in a checklist.
+    Items can cover Windows settings, an exact local file, literal text near the end of a
+    log, recent Windows event IDs, or one TCP host and port. This command does not apply a
+    fix or change Windows. A TcpPort item does make one real, observable connection
+    attempt to the named destination, then closes it without sending application data.
+
+    File-text results do not contain matching lines, and event results do not contain
+    event messages or event data. In script output, a checklist is called a baseline and
+    each checklist item is called a control. Those names are retained so existing
+    PowerShell automation remains compatible.
 
     The report includes results, a score, guidance, and a predictable ExitCode for
     scripts: 0 when checked items match, 2 when an item does not match, or 3 when one or
@@ -17,7 +23,8 @@ function Get-EFComplianceReport {
 
     .PARAMETER Baseline
     The checklist to use: a built-in name, a checklist JSON file, or an object returned
-    by Get-EFBaseline.
+    by Get-EFBaseline. Review custom paths, event queries, hosts, and ports before running
+    the checklist.
 
     .PARAMETER ControlId
     One or more checklist item IDs to check. Every item is checked by default.
@@ -31,6 +38,12 @@ function Get-EFComplianceReport {
     .EXAMPLE
     $report = Get-EFComplianceReport -Baseline .\contoso-baseline.json
     $report.Results | Where-Object Status -ne 'Compliant'
+
+    .EXAMPLE
+    Get-EFComplianceReport -Baseline .\Contoso.EverydayChecks.json -NoProgress
+
+    Runs the four report-only everyday checks in the custom file. If it includes TcpPort,
+    the named connection attempt can be recorded by the destination or network tools.
 
     .OUTPUTS
     EndpointForge.ComplianceReport
@@ -68,7 +81,7 @@ function Get-EFComplianceReport {
         foreach ($control in $controls) {
             $controlIndex++
             if (-not $NoProgress) {
-                Write-Progress -Id 1102 -Activity 'EndpointForge Windows settings check' `
+                Write-Progress -Id 1102 -Activity 'EndpointForge checklist check' `
                     -Status "Checking: $($control.Title)" `
                     -PercentComplete ([math]::Round(($controlIndex / $controls.Count) * 100))
             }
@@ -85,7 +98,7 @@ function Get-EFComplianceReport {
         }
     )
     if (-not $NoProgress) {
-        Write-Progress -Id 1102 -Activity 'EndpointForge Windows settings check' -Completed
+        Write-Progress -Id 1102 -Activity 'EndpointForge checklist check' -Completed
     }
 
     $compliantCount = @($results | Where-Object Status -eq 'Compliant').Count
@@ -100,14 +113,15 @@ function Get-EFComplianceReport {
     $isCompliant = $nonCompliantCount -eq 0 -and $errorCount -eq 0
     $exitCode = if ($errorCount -gt 0) { 3 } elseif ($nonCompliantCount -gt 0) { 2 } else { 0 }
     $status = if ($nonCompliantCount -gt 0) { 'NonCompliant' } elseif ($errorCount -gt 0) { 'Incomplete' } else { 'Compliant' }
+    $automaticFixCount = @($results | Where-Object { $_.Status -eq 'NonCompliant' -and $_.Remediable }).Count
     $summaryText = if ($isCompliant) {
-        "$compliantCount applicable checklist item(s) match the expected settings."
+        "$compliantCount applicable checklist item(s) have the expected result."
     }
     elseif ($errorCount -gt 0) {
         "The check is incomplete: $nonCompliantCount item(s) do not match and $errorCount could not be checked."
     }
     else {
-        "$nonCompliantCount checklist item(s) need attention. $score% of the settings that could be checked match."
+        "$nonCompliantCount checklist item(s) need attention. $score% of the items that could be checked match."
     }
     $nextStep = if ($isCompliant) {
         'No supported fix is needed.'
@@ -115,8 +129,11 @@ function Get-EFComplianceReport {
     elseif ($errorCount -gt 0) {
         'Review the items that could not be checked. Some protected information requires PowerShell to be opened with Run as Administrator (also called an elevated session).'
     }
-    else {
+    elseif ($automaticFixCount -gt 0) {
         'Create a fix plan to see what EndpointForge can safely preview and what needs a person to review.'
+    }
+    else {
+        'Review the details and follow your organization''s approved manual guidance. EndpointForge does not change these report-only items.'
     }
 
     $report = [pscustomobject]@{
@@ -141,6 +158,7 @@ function Get-EFComplianceReport {
         NonCompliantCount   = $nonCompliantCount
         NotApplicableCount  = $notApplicableCount
         ErrorCount          = $errorCount
+        AutomaticFixCount   = $automaticFixCount
         Results             = $results
     }
 

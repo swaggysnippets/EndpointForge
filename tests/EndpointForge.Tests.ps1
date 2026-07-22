@@ -516,6 +516,55 @@ Describe 'EndpointForge combined summary experience' {
         }
         Should -Invoke Write-Progress -ModuleName EndpointForge -Times 0 -Exactly
     }
+
+    It 'does not recommend the fix planner for report-only checklist problems' {
+        Mock Get-EFEndpointHealth -ModuleName EndpointForge {
+            [pscustomobject]@{
+                PSTypeName      = 'EndpointForge.EndpointHealth'
+                Status          = 'Healthy'
+                Score           = 100
+                DataStatus      = 'Complete'
+                CoveragePercent = 100
+                Checks          = @()
+                PendingReboot   = [pscustomobject]@{ IsRebootPending = $false }
+                Inventory       = [pscustomobject]@{
+                    ComputerName           = 'REPORT-ONLY-PC'
+                    OperatingSystemName    = 'Microsoft Windows 11 Enterprise'
+                    OperatingSystemBuild   = '26100'
+                    DeviceModel            = 'Virtual Machine'
+                    UptimeDays             = 1
+                    SystemDriveFreePercent = 50
+                    Security               = [pscustomobject]@{
+                        Firewall = @(); Defender = $null; BitLocker = $null; SecureBoot = $null; Tpm = $null
+                    }
+                }
+            }
+        }
+        Mock Get-EFComplianceReport -ModuleName EndpointForge {
+            [pscustomobject]@{
+                PSTypeName        = 'EndpointForge.ComplianceReport'
+                Score             = 0
+                DataStatus        = 'Complete'
+                CoveragePercent   = 100
+                NonCompliantCount = 1
+                ErrorCount        = 0
+                Results           = @(
+                    [pscustomobject]@{
+                        ControlId = 'FILE-REPORT-ONLY'; Title = 'Required marker file'; Type = 'FileExists';
+                        Severity = 'Medium'; Status = 'NonCompliant'; Remediable = $false;
+                        ActualValue = $false; DesiredValue = $true; Message = 'The file was not found.';
+                        RecommendedAction = 'Ask your IT administrator to review the missing file.'
+                    }
+                )
+            }
+        }
+
+        $summary = Get-EFEndpointSummary -NoProgress
+
+        $summary.SupportedFixCount | Should -Be 0
+        $summary.AutomationNextStep | Should -BeNullOrEmpty
+        $summary.NextStep | Should -Match 'report-only'
+    }
 }
 
 Describe 'EndpointForge terminal summary experience' {
@@ -578,6 +627,8 @@ Describe 'EndpointForge terminal summary experience' {
         ($plainLines -join "`n") | Should -Be ($colorLines -join "`n")
         ($plainLines -join "`n") | Should -Match 'TEST-PC'
         ($plainLines -join "`n") | Should -Match 'Review the remediation plan'
+        ($plainLines -join "`n") | Should -Match 'did not change Windows settings'
+        ($plainLines -join "`n") | Should -Match 'brief outbound connections'
         $colorCallCount | Should -BeGreaterThan 0
         $passThruOutput.Count | Should -Be 1
         [object]::ReferenceEquals($summary, $passThruOutput[0]) | Should -BeTrue
@@ -651,6 +702,21 @@ Describe 'EndpointForge guided menu experience' {
         $output[0].ErrorCount | Should -Be 0
         Should -Invoke Write-Host -ModuleName EndpointForge -ParameterFilter { [string]$Object -match '\[INVALID\]' }
         Should -Invoke Write-Host -ModuleName EndpointForge -Times 0 -Exactly -ParameterFilter { $null -ne $ForegroundColor }
+    }
+
+    It 'labels the detailed result view as explaining every problem' {
+        $script:EFMenuInputs.Enqueue('2')
+        $script:EFMenuInputs.Enqueue('B')
+        $script:EFMenuInputs.Enqueue('Q')
+        $script:EFResultMenuLines = [Collections.Generic.List[string]]::new()
+        Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
+        Mock Write-Host -ModuleName EndpointForge { $script:EFResultMenuLines.Add([string]$Object) }
+
+        Show-EFMenu -NoPause -NoColor
+        $text = $script:EFResultMenuLines -join "`n"
+
+        $text | Should -Match 'Explain every problem'
+        $text | Should -Not -Match 'Explain every item'
     }
 
     It 'forwards assessment settings and keeps subordinate objects out of the pipeline' {

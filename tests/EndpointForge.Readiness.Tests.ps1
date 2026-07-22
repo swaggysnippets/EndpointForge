@@ -40,7 +40,7 @@ Describe 'EndpointForge endpoint readiness capability' {
             $result.FixReady | Should -BeTrue
             $result.ControlCount | Should -Be 1
             $result.AvailableControlCount | Should -Be 1
-            $result.ChecklistDefinition | Should -Match 'list of expected Windows settings'
+            $result.ChecklistDefinition | Should -Match 'list of things expected to be true'
             Should -Invoke Invoke-EFEndpointRemediation -Times 0 -Exactly
         }
 
@@ -127,8 +127,8 @@ Describe 'EndpointForge endpoint readiness capability' {
             $output = @(Write-EFMenuReadiness -Readiness $result -NoColor -Width 80)
 
             $output.Count | Should -Be 0
-            ($script:readinessLines -join "`n") | Should -Match 'Checking only reads Windows settings'
-            ($script:readinessLines -join "`n") | Should -Match 'A checklist is simply the list of expected Windows settings'
+            ($script:readinessLines -join "`n") | Should -Match 'Checking does not change this PC'
+            ($script:readinessLines -join "`n") | Should -Match 'A checklist is a list of things expected to be true'
         }
     }
 }
