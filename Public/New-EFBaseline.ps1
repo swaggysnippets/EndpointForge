@@ -1,10 +1,11 @@
 function New-EFBaseline {
     <#
     .SYNOPSIS
-    Creates a validated starter Windows settings checklist.
+    Creates a validated starter EndpointForge checklist.
 
     .DESCRIPTION
-    A checklist is a list of Windows settings and expected values; scripts call it a
+    A checklist is a list of things you expect to be true, such as a Windows setting,
+    required file, recent event, or available network service; scripts call it a
     baseline. This command copies a maintained starter template, validates it, and writes
     UTF-8 JSON plus its schema. It does not apply the checklist or change Windows. A
     PowerShell WhatIf preview creates no files, and existing files require Force.
@@ -23,8 +24,9 @@ function New-EFBaseline {
 
     .PARAMETER Template
     Starter includes firewall, UAC, and Windows Update controls;
-    EnterpriseRecommended includes every built-in control; AuditOnly includes only
-    BitLocker, Secure Boot, and TPM audit controls.
+    EnterpriseRecommended includes every built-in setting; AuditOnly includes only
+    BitLocker, Secure Boot, and TPM checks. EverydayChecks creates four report-only,
+    edit-before-use examples for a file, text log, Windows event, and TCP connection.
 
     .PARAMETER Force
     Replaces an existing checklist file.
@@ -34,6 +36,11 @@ function New-EFBaseline {
 
     .EXAMPLE
     New-EFBaseline -Name Contoso.Audit -Template AuditOnly -Path .\Contoso.Audit.json -WhatIf
+
+    .EXAMPLE
+    New-EFBaseline -Name Contoso.Operations -Template EverydayChecks -Path .\checklists
+
+    Creates editable everyday check examples. Replace every sample target before use.
 
     .OUTPUTS
     EndpointForge.BaselineCreationResult
@@ -52,14 +59,14 @@ function New-EFBaseline {
         [ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$')]
         [string]$Version = '1.0.0',
 
-        [ValidateSet('Starter', 'EnterpriseRecommended', 'AuditOnly')]
+        [ValidateSet('Starter', 'EnterpriseRecommended', 'AuditOnly', 'EverydayChecks')]
         [string]$Template = 'Starter',
 
         [switch]$Force
     )
 
     if ([string]::IsNullOrWhiteSpace($Description)) {
-        $Description = "$Name Windows settings checklist. Review it before use."
+        $Description = "$Name EndpointForge checklist. Review it before use."
     }
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -79,11 +86,18 @@ function New-EFBaseline {
         throw [System.IO.IOException]::new("Baseline '$targetPath' already exists. Use -Force to replace it.")
     }
 
-    $sourceBaseline = Get-EFBaseline -Name EnterpriseRecommended
-    $controlIds = switch ($Template) {
-        'Starter' { @('EF-FW-DOMAIN', 'EF-FW-PRIVATE', 'EF-FW-PUBLIC', 'EF-UAC-ENABLED', 'EF-WUA-NOT-DISABLED') }
-        'AuditOnly' { @('EF-BITLOCKER-OS', 'EF-SECUREBOOT', 'EF-TPM-READY') }
-        default { @($sourceBaseline.Controls.Id) }
+    if ($Template -eq 'EverydayChecks') {
+        $examplePath = Join-Path $script:ModuleRoot 'examples\EverydayChecks.json'
+        $sourceBaseline = Get-EFBaseline -Path $examplePath
+        $controlIds = @($sourceBaseline.Controls.Id)
+    }
+    else {
+        $sourceBaseline = Get-EFBaseline -Name EnterpriseRecommended
+        $controlIds = switch ($Template) {
+            'Starter' { @('EF-FW-DOMAIN', 'EF-FW-PRIVATE', 'EF-FW-PUBLIC', 'EF-UAC-ENABLED', 'EF-WUA-NOT-DISABLED') }
+            'AuditOnly' { @('EF-BITLOCKER-OS', 'EF-SECUREBOOT', 'EF-TPM-READY') }
+            default { @($sourceBaseline.Controls.Id) }
+        }
     }
     $selectedControls = @($sourceBaseline.Controls | Where-Object Id -in $controlIds)
     $clonedControls = $selectedControls | ConvertTo-Json -Depth 12 | ConvertFrom-Json
@@ -123,7 +137,11 @@ function New-EFBaseline {
         ControlCount = @($createdBaseline.Controls).Count
         Baseline     = $createdBaseline
         NextSteps    = @(
-            "Edit and review: $targetPath"
+            $(if ($Template -eq 'EverydayChecks') {
+                "Replace every sample file path, search text, event source and ID, host, and port before use: $targetPath"
+            } else {
+                "Edit and review: $targetPath"
+            })
             "Validate: Test-EFBaseline -Path '$targetPath'"
             "Plan: Get-EFRemediationPlan -Baseline '$targetPath'"
         )

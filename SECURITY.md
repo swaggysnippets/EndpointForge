@@ -43,8 +43,9 @@ EndpointForge reports can contain host identity, hardware and operating-system d
 network configuration, installed software, security findings, checklist mismatches, and
 evidence of changes. JSONL logs contain computer and process context even though the module
 avoids intentionally logging several high-risk fields. Custom checklists (called baselines
-in PowerShell commands) can disclose an organization's security policy and desired registry
-or service configuration.
+in PowerShell commands) can disclose an organization's security policy, desired registry or
+service configuration, local file paths, literal log search text, event sources and IDs, and
+approved network destinations.
 
 HTML reports are self-contained: they use embedded styling, encode report values for HTML,
 and do not load scripts, fonts, images, or other content from the internet. Self-contained
@@ -77,6 +78,33 @@ source-control custom baseline files before deploying them. The module does not 
 script text from a baseline, but a remediable baseline can change registry values, service
 state, firewall profiles, Defender real-time protection, and Windows optional features.
 
+The `FileExists`, `FileContainsText`, `WindowsEvent`, and `TcpPort` types are report-only
+and cannot request automatic remediation. Report-only does not mean free of observable or
+sensitive activity:
+
+- File checks name one exact local path. Relative paths, network shares, mapped network
+  drives, wildcards, alternate data streams, and paths through links are rejected. File
+  checks can still reveal whether a sensitive file exists. `FileContainsText` reads up to
+  the requested number of trailing lines, so use the smallest useful `TailLines` value.
+- Text-log results contain only whether the literal text was found. Matching lines and
+  other file contents are not included. The check stops if the file changes during the
+  read or the selected tail exceeds the decoded-character limit; an uncertain read is not
+  reported as a match.
+- Event results contain a Boolean answer and a bounded count summary. Event messages and
+  event data are not included. Access to protected logs, especially the Security log, can
+  require an Administrator process. Event IDs must be reviewed together with their exact
+  log and provider because the same number can have different meanings.
+- A TCP item makes one real outbound connection attempt to the exact `HostName` and
+  `Port`, then closes it without sending application data. The destination, firewall,
+  endpoint security product, and network monitoring tools may record the attempt. A
+  successful connection proves only basic TCP reachability, not protocol, identity,
+  encryption, authentication, or application health.
+
+Treat an untrusted checklist as capable of probing local file state, protected event logs,
+and network reachability. Review all paths, event queries, hosts, and ports before running
+it, even in a standard-user process. Validation limits input shape and scope; it does not
+decide whether a target is appropriate for the organization.
+
 Use signed modules and signed baseline artifacts where organizational policy requires them.
 Validate the staged SHA-256 inventory and the package source at distribution boundaries.
 Deploy read-only evaluation first, preview approved controls with `-WhatIf`, and use a
@@ -87,8 +115,14 @@ representative pilot ring before remediation.
 `Get-EFFleetSummary` is read-only. It connects with PowerShell remoting and asks an existing
 EndpointForge installation on each target to collect a computer checkup. It does not install
 EndpointForge, enable remoting, change TrustedHosts, weaken authentication, or run fixes.
-Each target must already have EndpointForge 0.4.0 or later, permit PowerShell remoting, and
+Each target must already have EndpointForge 0.5.0 or later, permit PowerShell remoting, and
 allow the selected account to connect.
+
+If a fleet checklist contains `TcpPort` items, `Get-EFFleetSummary` rejects the run unless
+`-AllowNetworkChecks` is supplied. That switch is an explicit acknowledgement, not a
+network authorization system: operators must independently confirm that every destination
+and every source computer is approved. Each target makes its own connection attempt for
+each TCP item, so a fleet run can multiply observable attempts across the target list.
 
 That remote connection crosses several trust boundaries: the operator's computer, the
 remoting service and network path, the module already installed on the target, and the place

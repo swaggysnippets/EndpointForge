@@ -4,14 +4,15 @@ function Get-EFEndpointReadiness {
     Explains what EndpointForge can check and safely offer to fix in the current PowerShell window.
 
     .DESCRIPTION
-    Performs a strictly read-only preflight. It checks the Windows platform, the selected
+    Performs a non-changing preflight. It checks the Windows platform, the selected
     checklist, administrator access, remote-session context, and whether Windows provides
-    the commands needed by each checklist item. It does not evaluate policy settings and
-    never changes the endpoint.
+    the features needed by each checklist item. It does not run the checklist. TCP items
+    are identified because running them later makes a brief, observable connection.
 
     EndpointForge calls its list of expected settings a baseline. In beginner-facing
-    guidance, this command calls it a checklist: the list of Windows settings that the PC
-    will be compared with. Selecting a checklist does not apply it.
+    guidance, this command calls it a checklist: a list of things expected to be true,
+    including settings, files, recent events, or network availability. Selecting a
+    checklist does not run it or apply it.
 
     .PARAMETER Baseline
     The checklist to inspect. Supply the built-in name, a custom JSON path, or a validated
@@ -94,6 +95,7 @@ function Get-EFEndpointReadiness {
     $automaticFixCount = @($capabilities | Where-Object IsAutomaticFixDeclared).Count
     $availableAutomaticFixCount = @($capabilities | Where-Object AutomaticFixAvailable).Count
     $fixNowCount = @($capabilities | Where-Object CanFixNow).Count
+    $networkCheckCount = @($capabilities | Where-Object Type -eq 'TcpPort').Count
 
     $assessmentReady = $isWindowsPlatform -and $baselineIsValid
     $completeCheckLikely = $assessmentReady -and $unavailableControlCount -eq 0 -and
@@ -119,6 +121,11 @@ function Get-EFEndpointReadiness {
     if ($isRemoteSession) {
         $limitations.Add('This is a remote PowerShell session. Checks and approved fixes affect the remote PC, not the PC in front of you.')
     }
+    if ($networkCheckCount -gt 0) {
+        $limitations.Add(
+            "$networkCheckCount checklist item(s) will make one TCP connection attempt when run. The destination or network monitoring tools may record it."
+        )
+    }
 
     $status = if (-not $assessmentReady) {
         'Blocked'
@@ -134,7 +141,7 @@ function Get-EFEndpointReadiness {
     $summary = switch ($status) {
         'Blocked' { 'EndpointForge cannot start this checklist until the blocked item is corrected.' }
         'Limited' { 'EndpointForge can check this PC now, but some details or automatic fixes may be unavailable.' }
-        default { 'EndpointForge is ready to check this PC. Checking only reads settings and does not change anything.' }
+        default { 'EndpointForge is ready to check this PC. The check does not change Windows; review the Network activity line for any TCP connection items.' }
     }
     $nextStep = if (-not $isWindowsPlatform) {
         'Run EndpointForge on the Windows PC you want to check.'
@@ -165,7 +172,7 @@ function Get-EFEndpointReadiness {
         Name = 'Checklist'
         Status = if ($baselineIsValid) { 'Ready' } else { 'Blocked' }
         PlainLanguage = if ($baselineIsValid) {
-            "'$checklistName' is valid and contains $($controls.Count) setting check(s). A checklist is the list of expected Windows settings; selecting it does not apply changes."
+            "'$checklistName' is valid and contains $($controls.Count) item(s). A checklist is a list of things expected to be true; selecting it does not run checks or apply changes."
         }
         else {
             "The selected checklist could not be read or validated: $baselineError"
@@ -201,6 +208,21 @@ function Get-EFEndpointReadiness {
     })
     $checks.Add([pscustomobject]@{
         PSTypeName = 'EndpointForge.ReadinessCheck'
+        Name = 'Network activity'
+        Status = if ($networkCheckCount -gt 0) { 'Warning' } elseif ($assessmentReady) { 'Ready' } else { 'Blocked' }
+        PlainLanguage = if ($networkCheckCount -gt 0) {
+            "$networkCheckCount checklist item(s) will briefly contact a named network host and port when the checklist is run. No application data is sent, but the attempt may be recorded."
+        }
+        elseif ($assessmentReady) {
+            'This checklist does not contain TCP connection checks.'
+        }
+        else {
+            'Network activity can be described after the checklist is ready.'
+        }
+        NextStep = if ($networkCheckCount -gt 0) { 'Review each TcpPort item and confirm that its destination is approved.' } else { 'No action is needed.' }
+    })
+    $checks.Add([pscustomobject]@{
+        PSTypeName = 'EndpointForge.ReadinessCheck'
         Name = 'Target PC'
         Status = if ($isRemoteSession) { 'Warning' } else { 'Ready' }
         PlainLanguage = if ($isRemoteSession) {
@@ -225,7 +247,7 @@ function Get-EFEndpointReadiness {
         IsRemoteSession               = $isRemoteSession
         ChecklistName                 = $checklistName
         ChecklistVersion              = $checklistVersion
-        ChecklistDefinition           = 'A checklist (called a baseline in automation) is the list of expected Windows settings that the PC is compared with. Selecting or checking it does not apply changes.'
+        ChecklistDefinition           = 'A checklist (called a baseline in automation) is a list of things expected to be true, such as settings, files, recent events, and network availability. Selecting it does not run checks or apply changes.'
         ControlCount                  = $controls.Count
         AvailableControlCount         = $capabilities.Count - $unavailableControlCount
         UnavailableControlCount       = $unavailableControlCount
@@ -233,6 +255,7 @@ function Get-EFEndpointReadiness {
         AutomaticFixCount             = $automaticFixCount
         AvailableAutomaticFixCount    = $availableAutomaticFixCount
         FixNowCount                   = $fixNowCount
+        NetworkCheckCount             = $networkCheckCount
         Summary                       = $summary
         NextStep                      = $nextStep
         Limitations                   = @($limitations)

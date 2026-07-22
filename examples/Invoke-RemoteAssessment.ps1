@@ -10,7 +10,7 @@ settings, or approve fixes.
 Before running this example, each remote computer must already:
 
 - allow PowerShell remoting according to your organization's policy;
-- have EndpointForge 0.4.0 or later installed; and
+- have EndpointForge 0.5.0 or later installed; and
 - allow the supplied account (or your current account) to connect.
 
 The saved report can contain computer names, device details, and security findings. Keep
@@ -40,7 +40,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Import-Module EndpointForge -MinimumVersion 0.4.0 -ErrorAction Stop
+Import-Module EndpointForge -MinimumVersion 0.5.0 -ErrorAction Stop
 
 $fleetParameters = @{
     ComputerName   = $ComputerName

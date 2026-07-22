@@ -124,6 +124,145 @@ function Get-EFControlState {
                     -DesiredValue $desiredValue -Message "Windows optional feature '$name' evaluated."
             }
 
+            'FileExists' {
+                $path = Resolve-EFLocalFilePath -Path ([string](Get-EFPropertyValue -InputObject $Control -Name 'Path')) `
+                    -CheckExistingAncestors
+                try {
+                    $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+                    $actual = -not [bool]$item.PSIsContainer
+                    $message = if ($actual) {
+                        "The requested file exists at '$path'."
+                    }
+                    else {
+                        "A folder exists at '$path', but the checklist asks for a file."
+                    }
+                }
+                catch [System.Management.Automation.ItemNotFoundException] {
+                    $actual = $false
+                    $message = "No file exists at '$path'."
+                }
+
+                $status = if (Test-EFValueEqual -Actual $actual -Desired $desiredValue) { 'Compliant' } else { 'NonCompliant' }
+                return New-EFControlResult -Control $Control -Status $status -ActualValue $actual `
+                    -DesiredValue $desiredValue -Message $message
+            }
+
+            'FileContainsText' {
+                $path = Resolve-EFLocalFilePath -Path ([string](Get-EFPropertyValue -InputObject $Control -Name 'Path')) `
+                    -CheckExistingAncestors
+                $text = [string](Get-EFPropertyValue -InputObject $Control -Name 'Text')
+                $tailLines = [int](Get-EFPropertyValue -InputObject $Control -Name 'TailLines' -Default 2000)
+                $caseSensitive = [bool](Get-EFPropertyValue -InputObject $Control -Name 'CaseSensitive' -Default $false)
+                $encoding = [string](Get-EFPropertyValue -InputObject $Control -Name 'Encoding' -Default 'Utf8')
+                $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+                if ([bool]$item.PSIsContainer) {
+                    throw "The path '$path' is a folder. This checklist item requires a text file."
+                }
+
+                $beforeLength = [int64]$item.Length
+                $beforeWriteTime = $item.LastWriteTimeUtc
+                $tail = Read-EFBoundedTextTail -Path $path -TailLines $tailLines -Encoding $encoding
+                $lines = @($tail.Lines)
+                $afterItem = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+                if ([int64]$afterItem.Length -ne $beforeLength -or $afterItem.LastWriteTimeUtc -ne $beforeWriteTime) {
+                    throw "The text file '$path' changed while EndpointForge was reading it. Run the check again for a trustworthy answer."
+                }
+
+                $comparison = if ($caseSensitive) { [StringComparison]::Ordinal } else { [StringComparison]::OrdinalIgnoreCase }
+                $found = $false
+                foreach ($line in $lines) {
+                    if (([string]$line).IndexOf($text, $comparison) -ge 0) {
+                        $found = $true
+                        break
+                    }
+                }
+
+                $status = if (Test-EFValueEqual -Actual $found -Desired $desiredValue) { 'Compliant' } else { 'NonCompliant' }
+                $finding = if ($found) { 'was found' } else { 'was not found' }
+                return New-EFControlResult -Control $Control -Status $status -ActualValue $found `
+                    -DesiredValue $desiredValue -Message (
+                        "Checked up to the most recent $tailLines lines in '$path'; the requested text $finding. File contents are not included in the result."
+                    )
+            }
+
+            'WindowsEvent' {
+                if ($null -eq (Get-Command -Name Get-WinEvent -ErrorAction SilentlyContinue)) {
+                    return New-EFControlResult -Control $Control -Status Error -ActualValue $null `
+                        -DesiredValue $desiredValue -Message 'Windows event log commands are unavailable.'
+                }
+
+                $logName = [string](Get-EFPropertyValue -InputObject $Control -Name 'LogName')
+                $eventIds = @((Get-EFPropertyValue -InputObject $Control -Name 'EventIds') | ForEach-Object { [int]$_ })
+                $providerName = [string](Get-EFPropertyValue -InputObject $Control -Name 'ProviderName')
+                $lookbackMinutes = [int](Get-EFPropertyValue -InputObject $Control -Name 'LookbackMinutes' -Default 60)
+                $minimumCount = [int](Get-EFPropertyValue -InputObject $Control -Name 'MinimumCount' -Default 1)
+
+                $eventLog = Get-WinEvent -ListLog $logName -ErrorAction Stop
+                if ($null -eq $eventLog) {
+                    throw "Windows did not return the event log '$logName'. Check the exact LogName."
+                }
+                if ((Test-EFPropertyPresent -InputObject $eventLog -Name 'IsEnabled') -and
+                    -not [bool](Get-EFPropertyValue -InputObject $eventLog -Name 'IsEnabled')) {
+                    throw "The Windows event log '$logName' is disabled, so it cannot provide trustworthy recent-event evidence."
+                }
+                $filter = @{
+                    LogName  = $logName
+                    Id       = [int[]]$eventIds
+                    StartTime = [DateTime]::Now.AddMinutes(-$lookbackMinutes)
+                }
+                if (-not [string]::IsNullOrWhiteSpace($providerName)) {
+                    $filter.ProviderName = $providerName
+                }
+
+                try {
+                    $events = @(Get-WinEvent -FilterHashtable $filter -MaxEvents $minimumCount -ErrorAction Stop)
+                }
+                catch {
+                    if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound*' -or
+                        $_.Exception.Message -match '^No events were found') {
+                        $events = @()
+                    }
+                    else {
+                        throw
+                    }
+                }
+
+                $actual = $events.Count -ge $minimumCount
+                $status = if (Test-EFValueEqual -Actual $actual -Desired $desiredValue) { 'Compliant' } else { 'NonCompliant' }
+                $providerDescription = if ([string]::IsNullOrWhiteSpace($providerName)) { '' } else { " from '$providerName'" }
+                $countDescription = if ($events.Count -ge $minimumCount) {
+                    "Found at least $($events.Count) matching event(s)"
+                }
+                else {
+                    "Found $($events.Count) matching event(s)"
+                }
+                return New-EFControlResult -Control $Control -Status $status -ActualValue $actual `
+                    -DesiredValue $desiredValue -Message (
+                        "$countDescription$providerDescription in '$logName' during the last $lookbackMinutes minute(s); at least $minimumCount were requested. Event messages are not included in the result."
+                    )
+            }
+
+            'TcpPort' {
+                $hostName = [string](Get-EFPropertyValue -InputObject $Control -Name 'HostName')
+                $port = [int](Get-EFPropertyValue -InputObject $Control -Name 'Port')
+                $timeoutMilliseconds = [int](Get-EFPropertyValue -InputObject $Control -Name 'TimeoutMilliseconds' -Default 3000)
+                $probe = Test-EFTcpPort -HostName $hostName -Port $port -TimeoutMilliseconds $timeoutMilliseconds
+                if ($probe.FailureReason -eq 'NameResolutionFailed') {
+                    throw "The host name '$hostName' could not be resolved. Check the spelling and DNS configuration."
+                }
+                if ([bool]$probe.IsEvaluationError) {
+                    throw "Windows could not complete the TCP port check for '$hostName' on port $port ($($probe.FailureReason))."
+                }
+
+                $actual = [bool]$probe.Connected
+                $status = if (Test-EFValueEqual -Actual $actual -Desired $desiredValue) { 'Compliant' } else { 'NonCompliant' }
+                $outcome = if ($actual) { 'accepted a TCP connection' } else { "did not accept a TCP connection ($($probe.FailureReason))" }
+                return New-EFControlResult -Control $Control -Status $status -ActualValue $actual `
+                    -DesiredValue $desiredValue -Message (
+                        "'$hostName' port $port $outcome within $timeoutMilliseconds millisecond(s). EndpointForge opened and closed one TCP connection without sending application data."
+                    )
+            }
+
             'BitLocker' {
                 if ($null -eq (Get-Command -Name Get-BitLockerVolume -ErrorAction SilentlyContinue)) {
                     return New-EFControlResult -Control $Control -Status NotApplicable -ActualValue $null `

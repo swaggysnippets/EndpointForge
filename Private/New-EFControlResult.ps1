@@ -51,6 +51,21 @@ function New-EFControlResult {
     else {
         'Nothing. EndpointForge reports this item but does not change it automatically.'
     }
+    $defaultHowChecked = [string](
+        Get-EFControlCapability -Control $Control -IsWindowsPlatform $true -IsAdministrator $false
+    ).HowChecked
+    $defaultSafetyNotes = if ($remediable) {
+        'Review the current and expected values before making any change.'
+    }
+    else {
+        'This is a report-only item. Review the result in context before taking manual action.'
+    }
+    $defaultRecoveryGuidance = if ($remediable) {
+        'Use the before value in the change receipt and your approved Windows management process if recovery is needed.'
+    }
+    else {
+        'EndpointForge makes no change for this item, so there is no EndpointForge change to undo.'
+    }
 
     [pscustomobject]@{
         PSTypeName    = 'EndpointForge.ControlResult'
@@ -65,13 +80,13 @@ function New-EFControlResult {
         Remediable    = $remediable
         CanFixAutomatically = $remediable
         WhyItMatters  = [string](Get-EFPropertyValue -InputObject $Control -Name 'WhyItMatters' -Default (
-            Get-EFPropertyValue -InputObject $Control -Name 'Description' -Default 'This item is part of the selected Windows settings checklist.'
+            Get-EFPropertyValue -InputObject $Control -Name 'Description' -Default 'This item is part of the selected checklist.'
         ))
-        HowChecked    = [string](Get-EFPropertyValue -InputObject $Control -Name 'HowChecked' -Default 'EndpointForge reads the related Windows setting and compares it with the checklist.')
+        HowChecked    = [string](Get-EFPropertyValue -InputObject $Control -Name 'HowChecked' -Default $defaultHowChecked)
         WhatWouldChange = [string](Get-EFPropertyValue -InputObject $Control -Name 'WhatWouldChange' -Default $defaultWhatWouldChange)
         ManualAction  = [string](Get-EFPropertyValue -InputObject $Control -Name 'ManualAction' -Default 'Ask your IT administrator to review this item using your organization''s approved process.')
-        SafetyNotes   = [string](Get-EFPropertyValue -InputObject $Control -Name 'SafetyNotes' -Default 'Review the current and expected values before making any change.')
-        RecoveryGuidance = [string](Get-EFPropertyValue -InputObject $Control -Name 'RecoveryGuidance' -Default 'Use the before value in the change receipt and your approved Windows management process if recovery is needed.')
+        SafetyNotes   = [string](Get-EFPropertyValue -InputObject $Control -Name 'SafetyNotes' -Default $defaultSafetyNotes)
+        RecoveryGuidance = [string](Get-EFPropertyValue -InputObject $Control -Name 'RecoveryGuidance' -Default $defaultRecoveryGuidance)
         RecommendedAction = $recommendedAction
         EvaluatedAtUtc = [DateTime]::UtcNow
     }

@@ -1,6 +1,6 @@
 @{
     RootModule        = 'EndpointForge.psm1'
-    ModuleVersion     = '0.4.0'
+    ModuleVersion     = '0.5.0'
     GUID              = '7566d24f-23a9-4481-8cb1-a5ad1e8a013d'
     Author            = 'Logan Bamborough'
     CompanyName       = 'Logan Bamborough'
@@ -41,11 +41,12 @@
         PSData = @{
             Tags = @(
                 'Windows', 'Endpoint', 'Enterprise', 'Automation', 'Compliance',
-                'Inventory', 'Remediation', 'Security', 'Intune', 'RMM', 'Report', 'HTML', 'Fleet'
+                'Inventory', 'Remediation', 'Security', 'Intune', 'RMM', 'Report', 'HTML', 'Fleet',
+                'Diagnostics', 'EventLog', 'Monitoring', 'TCP'
             )
             LicenseUri = 'https://opensource.org/license/mit'
             ProjectUri = 'https://github.com/swaggysnippets/EndpointForge'
-            ReleaseNotes = 'Beginner-first goal menu; plain-language readiness and results; before-and-after comparisons; self-contained HTML reports; read-only fleet checks; richer fix explanations, receipts, and recovery guidance.'
+            ReleaseNotes = 'Adds beginner-friendly report-only checks for exact local files, literal text near the end of logs, recent Windows event IDs, and bounded TCP connections; an editable EverydayChecks template; clear menu explanations; privacy-safe results; and explicit opt-in before TCP checks fan out across a fleet.'
         }
     }
 }

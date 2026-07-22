@@ -1,19 +1,22 @@
 function Get-EFBaseline {
     <#
     .SYNOPSIS
-    Loads a built-in or file-based Windows settings checklist.
+    Loads a built-in or file-based Windows computer checklist.
 
     .DESCRIPTION
-    A checklist is a list of Windows settings and their expected values. PowerShell
-    commands call it a baseline for compatibility. This command loads and validates the
-    JSON file; it does not check or change a computer. ListAvailable shows the checklists
-    included with the module.
+    A checklist is a list of things expected to be true, such as Windows settings,
+    required files, recent events, or an available network service. PowerShell commands
+    call it a baseline for compatibility. This command only loads and validates the JSON
+    file. It does not read a target file or event log, attempt a network connection, check
+    a setting, or change a computer. ListAvailable shows the checklists included with the
+    module.
 
     .PARAMETER Name
     The built-in checklist name. EnterpriseRecommended is the default.
 
     .PARAMETER Path
-    The path to a custom checklist JSON file.
+    The path to a custom checklist JSON file. Review custom files before use because they
+    choose which local paths, event logs, hosts, and ports later checks can inspect.
 
     .PARAMETER ListAvailable
     Lists information about every checklist included with the installed module.
@@ -26,6 +29,11 @@ function Get-EFBaseline {
 
     .EXAMPLE
     Get-EFBaseline -ListAvailable
+
+    .EXAMPLE
+    Get-EFBaseline -Path .\checklists\Contoso.EverydayChecks.json
+
+    Loads and validates an everyday-checklist file without running any of its checks.
 
     .OUTPUTS
     EndpointForge.Baseline or EndpointForge.BaselineInfo.

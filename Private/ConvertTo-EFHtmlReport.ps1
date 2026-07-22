@@ -74,7 +74,7 @@ function ConvertTo-EFHtmlReport {
         switch ($Name) {
             'OverallStatus' { 'Overall result' }
             'HealthStatus' { 'Computer health' }
-            'ComplianceStatus' { 'Recommended settings' }
+            'ComplianceStatus' { 'Checklist result' }
             'DataStatus' { 'Check completeness' }
             'Score' { 'Overall score' }
             'CoveragePercent' { 'Information checked' }

@@ -21,6 +21,26 @@ Public commands use approved PowerShell verbs and the `EF` noun prefix. Private 
 
 ## Baseline controls
 
+New report-only control types require:
+
+- a deterministic, read-only evaluator and clear distinction between a known mismatch and
+  a value that could not be checked;
+- strict validation of exact targets, bounded work, and tests for invalid, inaccessible,
+  changing, and unexpectedly large input;
+- beginner-readable `WhyItMatters`, `HowChecked`, `ManualAction`, `SafetyNotes`, and
+  privacy wording in the example checklist;
+- no automatic remediation, restart request, or suggestion that EndpointForge repaired
+  the reported condition; and
+- result objects that expose only the evidence needed for the answer. Do not return log
+  lines, Windows event messages or payloads, credentials, or application data.
+
+File readers must reject network, relative, wildcard, provider, alternate-data-stream, and
+link or reparse-point paths. Keep reads bounded and detect a file that changes during the
+read. Event readers must bound the time window, event ID count, and returned count. Network
+checks must use exact destinations, a bounded timeout, no retries by default, and no
+application payload. Their help, menu, example, validation output, and security guidance
+must state that the connection attempt can be observed and recorded.
+
 New remediating control types require:
 
 - a read-only evaluator;
@@ -33,7 +53,9 @@ New remediating control types require:
 
 Remote or fleet features must remain read-only unless a separate, explicitly scoped design
 is approved. They must not install EndpointForge, enable WinRM, change TrustedHosts, or
-retain credentials as a convenience side effect.
+retain credentials as a convenience side effect. A fleet run containing network checks
+must require explicit operator acknowledgement such as `-AllowNetworkChecks`, explain that
+every target becomes a connection source, and test the blocked-by-default behavior.
 
 ## Release checklist
 
@@ -45,7 +67,7 @@ retain credentials as a convenience side effect.
   PSScriptAnalyzer and Pester.
 - Build from the reviewed source and require `Test-StagedModule.ps1` to report
   `HashesVerified = True`; review the packaged `README.md`, `SECURITY.md`, and
-  `CONTRIBUTING.md`.
+  `CONTRIBUTING.md`, the JSON schema, and every shipped checklist example.
 - Require `Test-PublishReadiness.ps1` to report `IsReady = True`. For an enterprise
   signed release, run `Protect-StagedModule.ps1` with an approved certificate and timestamp
   service, then run the readiness check with `-RequireSignature`.
