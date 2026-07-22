@@ -2,18 +2,20 @@ TOPIC
     about_EndpointForge
 
 SHORT DESCRIPTION
-    Beginner-friendly Windows computer checkups, safe fix previews, comparisons, and reports.
+    User-friendly Windows computer checkups, safe fix previews, comparisons, and reports.
 
 LONG DESCRIPTION
     A checklist is simply a list of things expected to be true, such as Windows settings,
-    required files, recent events, or an available network service. Selecting, viewing,
-    creating, or validating one does not run it or change Windows. EndpointForge helps a
-    person answer four practical questions about a Windows computer:
+    storage, applications, jobs, files, certificates, recent events, or an available
+    network service. Selecting, viewing, creating, or validating one does not run it or
+    change Windows. EndpointForge helps a person answer practical questions such as:
 
         1. Does this computer look healthy?
-        2. Do important settings and everyday checks match the selected checklist?
-        3. Which problems can EndpointForge safely preview and fix?
-        4. What changed between an earlier check and a later check?
+        2. Is a restart waiting, is storage running low, or are updates available?
+        3. Are expected applications, jobs, files, certificates, and settings in place?
+        4. Can the computer reach approved DNS, TCP, and web services?
+        5. Which problems can EndpointForge safely preview and fix?
+        6. What changed between an earlier check and a later check?
 
     The guided menu uses everyday language and labels whether each choice reads
     information, creates a file, or can change a Windows setting. Normal checks do not
@@ -48,15 +50,17 @@ EVERYDAY TERMS
     technical names so existing scripts remain compatible.
 
     Checklist
-        A list of things expected to be true, such as settings, files, recent events, or
-        an available network service. Selecting a checklist does not run or apply it.
+        A list of things expected to be true, such as settings, storage, applications,
+        jobs, files, certificates, recent events, or an available network service.
+        Selecting a checklist does not run or apply it.
 
     Baseline
         The script-facing name for a checklist. A parameter named Baseline asks which
         checklist to use.
 
     Checklist item
-        One thing to check, such as a setting, file, event, or network connection.
+        One thing to check, such as a setting, restart, update, application, job, file,
+        certificate, event, account relationship, or approved network connection.
 
     Control
         The script-facing name for a checklist item. ControlId is the item's stable name
@@ -125,8 +129,9 @@ GOAL-BASED MENU
 
         5. Check other computers
            Runs non-changing checks on computers already prepared for approved PowerShell
-           remote management. It never runs remote fixes. TCP checklist items require
-           explicit approval and can make observable connections from every computer.
+           remote management. It never runs remote fixes. Network-active checklist items
+           require explicit approval and can create observable activity from every
+           computer.
 
         6. Change what EndpointForge checks
            Selects, loads, validates, or creates checklist files. Selecting a checklist
@@ -311,31 +316,37 @@ CHECK OTHER COMPUTERS WITHOUT CHANGING THEM
         $fleet.Results
         $fleet.Failures
 
-    This command never changes Windows settings or runs fixes. A checklist containing TCP
-    items can still make the observable connection attempts explained below. Before it can
-    work, every target computer must
-    already:
+    This command never changes Windows settings or runs fixes. Network-active checklist
+    items can still create the observable activity explained below. Before it can work,
+    every target computer must already:
 
         - allow PowerShell remoting under the organization's policy;
-        - have EndpointForge 0.5.0 or later installed; and
+        - have EndpointForge 0.6.0 or later installed; and
         - allow the connecting account to run the check.
 
     EndpointForge does not install itself remotely, enable WinRM, change TrustedHosts,
     adjust firewall rules, or run remote fixes. It reports connection failures alongside
     successful results.
 
-    A checklist with TcpPort items is read-only, but every remote computer briefly tries
-    the named connection. The destination, firewall, or network monitoring tools may
-    record each attempt. Get-EFFleetSummary blocks these items until the checklist has
-    been reviewed and -AllowNetworkChecks is supplied:
+    TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
+    LocalGroupMembership are the five network-active types. Each remote computer can
+    contact the named TCP destination, name-resolution service, web address, configured
+    Windows Update or WSUS service, or an identity provider while resolving the requested
+    account name. Those systems, firewalls, proxies, or network monitoring tools may record
+    the activity.
+    Get-EFFleetSummary blocks these items until the checklist has been reviewed and
+    -AllowNetworkChecks is supplied:
 
         Get-EFFleetSummary `
             -ComputerName PC-101,PC-102 `
             -Baseline .\checklists\Contoso.EverydayChecks.json `
             -AllowNetworkChecks
 
-    No application data is sent. A successful connection does not test HTTPS, sign-in,
-    or whether the application itself is healthy.
+    TCP checks send no application data. Name-resolution results omit returned addresses.
+    HTTP checks do not include response headers or read the response body. Update scans
+    return only a count. Local-group results contain only the requested direct-membership
+    answer. A passing answer proves only the exact fact named by the item, not sign-in or
+    complete application health.
 
     Use a credential only when the approved environment requires one:
 
@@ -363,22 +374,26 @@ CHECKLISTS FOR AN ORGANIZATION
             -Path .\checklists\Contoso.Workstation.json `
             -PassThru
 
-    Create editable examples for a required file, text near the end of a log, recent
-    Windows events, and one TCP connection:
+    Create editable report-only examples for computer health, applications, jobs, files,
+    logs, certificates, access, and approved network checks:
 
         New-EFBaseline `
             -Name Contoso.EverydayChecks `
             -Template EverydayChecks `
             -Path .\checklists\Contoso.EverydayChecks.json
 
-    Replace every sample file path, search text, event source and ID, and host name before
-    running the new checklist. The installed examples\EverydayChecks.json file explains
-    each property in plain language.
+    Replace every sample application, job, file path, search text, event source and ID,
+    certificate, account, host, port, and web address before running the new checklist.
+    The installed examples\EverydayChecks.json file explains each property in plain
+    language.
 
-    Use the validated file for a read-only check:
+    Use the validated file for a read-only check. Add -AllowNetworkChecks only after every
+    destination, requested account identity, update option, and purpose has been reviewed
+    and approved:
 
         Get-EFEndpointSummary `
             -Baseline .\checklists\Contoso.Workstation.json `
+            -AllowNetworkChecks `
             -NoProgress
 
     New-EFBaseline creates a starting file. It is not a substitute for organizational
@@ -390,62 +405,156 @@ CHECKLISTS FOR AN ORGANIZATION
     source control, and protect them from untrusted writes before an Administrator
     process uses them. Validate after every edit and before every deployment.
 
-    EndpointForge 0.5.0 supports Registry, Service, FirewallProfile, Defender,
-    WindowsOptionalFeature, BitLocker, SecureBoot, Tpm, FileExists, FileContainsText,
-    WindowsEvent, and TcpPort checklist items. BitLocker, SecureBoot, Tpm, FileExists,
-    FileContainsText, WindowsEvent, and TcpPort items are report-only. They report an
-    answer and manual guidance, but EndpointForge never fixes them automatically.
+    EndpointForge 0.6.0 supports 24 checklist item types. The menu can show this catalog
+    without running a check.
 
-    The four everyday types use a Boolean DesiredValue. True means the named file or text
-    should be present, enough events should exist, or the connection should succeed.
-    False means it should not. Set Remediable to false and RequiresReboot to false.
+WHAT EACH TYPE ANSWERS
+    Registry                  Does this Windows setting have the expected value?
+    Service                   Is this Windows service configured and running as expected?
+    FirewallProfile           Is Windows Firewall turned on for this network type?
+    Defender                  Does this Defender protection setting match what is expected?
+    WindowsOptionalFeature    Is this Windows feature turned on or off as expected?
+    BitLocker                 Is this drive protected by BitLocker?
+    SecureBoot                Is Secure Boot turned on?
+    Tpm                       Is the computer security chip present and ready?
+    PendingRestart            Does this computer need to restart?
+    DiskSpace                 Does this drive have enough free space?
+    WindowsUpdateAvailable    Is the number of waiting Windows updates within the allowed limit?
+    DefenderSignatureHealth   Are Microsoft Defender threat definitions recent?
+    InstalledApplication      Does Windows list this application at the expected version?
+    ScheduledTaskHealth       Did this scheduled job run successfully and recently?
+    ProcessRunning            Is this program currently running?
+    FileExists                Does this exact local file exist?
+    FileContainsText          Is the expected text near the end of this log file?
+    FileFreshness             Has this file been updated recently?
+    WindowsEvent              Were enough matching Windows events recorded recently?
+    CertificateExpiry         Will this certificate remain valid long enough?
+    TcpPort                   Can this computer connect to this server and port?
+    DnsResolution             Can this computer find this server name?
+    HttpEndpointHealth        Is this website or web service responding as expected?
+    LocalGroupMembership      Is this approved account directly in this local group?
 
-    FileExists
-        Path is required. It checks one exact file on a local Windows drive. Environment
-        variables such as %ProgramData% are allowed. Relative paths, network shares,
-        mapped network drives, wildcards, alternate data streams, and paths through links
-        are rejected. A folder does not count as a file.
+NEW EVERYDAY HEALTH TYPES
+    PendingRestart has no target property. DesiredValue is normally false. EndpointForge
+    reads servicing, Windows Update, pending file replacement, installer, and computer
+    rename indicators. If any indicator cannot be read, it does not guess that no restart
+    is needed. EndpointForge never restarts Windows.
 
-    FileContainsText
-        Path and Text are required, and the same safe local-path rules as FileExists
-        apply. Text is an ordinary literal string, not a wildcard or regular expression.
-        TailLines defaults to 2,000 and accepts 1 through 10,000. CaseSensitive defaults
-        to false. Encoding defaults to Utf8 and also accepts Unicode,
-        BigEndianUnicode, or Ascii.
+    DiskSpace uses Drive, which defaults to %SystemDrive% and can be one exact fixed local
+    drive letter. Define MinimumFreePercent from 1 through 99, MinimumFreeGB from 1 through
+    1,048,576, or both. Both thresholds must pass when both are present. EndpointForge
+    does not delete, compress, or move files.
 
-        Only the selected tail is read. EndpointForge stops with Could not check if the
-        file changes while being read or if the selected tail exceeds 8,388,608 decoded
-        characters. The result says only whether the text was found; matching lines and
-        other file contents are not included.
+    WindowsUpdateAvailable answers whether the number found is less than or equal to
+    MaximumCount, which defaults to 0 and accepts up to 1,000. By default, it counts
+    assigned, non-hidden, uninstalled software updates. IncludeOptional and IncludeDrivers
+    can broaden the scan; both default to false. TimeoutSeconds defaults to 120 and accepts
+    10 through 600. Only one update item is allowed per checklist. It requires
+    -AllowNetworkChecks and uses the computer's configured Windows Update or WSUS service.
+    It never downloads or installs updates, accepts licenses, changes update settings, or
+    restarts Windows. The scan can start update components, refresh local scan metadata,
+    contact the service, and be recorded. Results contain only a count, not titles,
+    knowledge-base identifiers, or update metadata. An incomplete result, warning, provider
+    failure, or hard timeout is Could not check.
 
-    WindowsEvent
-        LogName and EventIds are required. EventIds can be one whole number from 0 through
-        65,535 or a list of up to 64 unique IDs. ProviderName can narrow the event source.
-        LookbackMinutes defaults to 60 and accepts up to 10,080, which is seven days.
-        MinimumCount defaults to 1 and accepts up to 1,000. Use event IDs documented for
-        the selected log and source. Protected logs can require Run as administrator.
-        Results contain a Boolean answer and bounded count summary, but no event messages
-        or event data.
+    DefenderSignatureHealth uses MaximumAgeDays, which defaults to 7 and accepts 0 through
+    365. EndpointForge does not refresh definitions. If Defender is present but is not the
+    active antivirus provider, the item is Not used on this computer rather than passing.
+    If Defender status cannot be read or does not contain trustworthy signature-age
+    information, the result is Could not check.
 
-    TcpPort
-        HostName and Port are required. TimeoutMilliseconds defaults to 3,000 and accepts
-        100 through 10,000. The host must be one exact DNS name or IP address, not a URL,
-        path, or wildcard. EndpointForge makes one TCP connection attempt, closes it, and
-        sends no application data. The destination and network monitoring tools may still
-        record the attempt. Success proves only that TCP connected, not that HTTPS,
-        authentication, or the application is healthy. A checklist can contain no more
-        than 32 TcpPort items.
+NEW APPLICATION AND JOB TYPES
+    InstalledApplication requires one exact ApplicationName. Publisher and ProductCode are
+    optional exact filters. Scope defaults to Machine and also accepts CurrentUser or All;
+    Architecture defaults to All and also accepts x64, x86, or User. Machine cannot be
+    combined with User, and CurrentUser cannot be combined with x64 or x86. On Windows Arm,
+    use Architecture All because x64- and x86-specific filtering is unavailable. Use
+    ExactVersion or MinimumVersion, not both. MinimumVersion accepts a Windows-style
+    version with one through four components. Wildcards are rejected, and a checklist can
+    contain at most 32 InstalledApplication items.
 
-    Checklist files contain paths, search text, event sources, and network destinations.
-    Results and reports can show which paths and destinations were checked and whether
-    they matched, even though matching log lines and event contents are omitted. Protect
-    all of these files according to the organization's data rules.
+    EndpointForge reads explicit 32-bit, 64-bit, and current-user uninstall registry views;
+    it never queries Win32_Product, launches a repair check, or installs or removes software.
+    CurrentUser means the account running EndpointForge, which can be SYSTEM in a device
+    management platform. It does not inventory portable apps, other user profiles, or
+    packages that have no uninstall record. If a version comparison is requested but
+    Windows supplies no trustworthy comparable version for the matching records, the result
+    is Could not check.
 
-    A missing file is a definite false answer for FileExists. A missing or unreadable text
-    file is Could not check because no trustworthy text answer is available. An
-    unavailable or protected event log is also Could not check. For TcpPort, a refused or
-    timed-out connection is false; a host name that cannot be resolved is Could not
-    check. Missing evidence is never silently treated as success.
+    ScheduledTaskHealth requires an exact TaskName and MaximumAgeMinutes from 1 through
+    525,600. TaskPath defaults to \ and must begin and end with a backslash;
+    ExpectedLastTaskResult defaults to 0 and accepts through 4,294,967,295;
+    RequireEnabled defaults to true. EndpointForge reads enabled state, last run time, and
+    result code, and compares age in UTC so daylight-saving changes do not distort it. It
+    never returns task actions or arguments and never changes or runs the task. A missing or
+    never-run task is a known mismatch; unavailable cmdlets, access failures, and
+    untrustworthy task information are Could not check.
+
+    ProcessRunning requires one exact ProcessName, with or without .exe. Paths, drive
+    names, and wildcards are rejected. Results omit IDs, paths, owners, command lines,
+    modules, and process contents. Process presence does not prove application health.
+
+NEW FILE, CERTIFICATE, AND ACCESS TYPES
+    FileFreshness requires one exact local Path and MaximumAgeMinutes from 1 through
+    525,600. It uses the same no-network, no-wildcard, no-link path rules as FileExists and
+    reads only the last-write time, never file contents.
+
+    CertificateExpiry requires an exact 40-character hexadecimal Thumbprint.
+    StoreLocation defaults to LocalMachine and can be CurrentUser. StoreName defaults to
+    My and also accepts Root, CA, AuthRoot, TrustedPeople, or TrustedPublisher.
+    MinimumDaysRemaining defaults to 30 and accepts up to 3,650. The store is opened in
+    read-only mode, and NotBefore and NotAfter are compared in UTC using complete days
+    remaining. Results omit subjects, DNS names, raw certificate data, and private-key
+    details. CurrentUser means the account running EndpointForge, which can be SYSTEM.
+
+    LocalGroupMembership requires exact GroupName and MemberName values or SIDs.
+    TimeoutSeconds defaults to 15 and accepts 10 through 60. EndpointForge resolves only
+    the requested account name to a SID, reads direct group members as raw SIDs, compares at
+    most 4,096 members, and returns only the requested yes-or-no relationship. It does not
+    expand nested groups, resolve or return unrelated names, or add or remove an account.
+    Account-name resolution can contact an organizational identity provider, so this item
+    requires -AllowNetworkChecks. Supplying a direct SID avoids account-name resolution.
+    Use 64-bit PowerShell on 64-bit Windows because the LocalAccounts provider is not
+    available in a 32-bit PowerShell process there.
+
+NEW NETWORK TYPES
+    DnsResolution requires one absolute, multi-label DNS HostName, not an IP address or URL.
+    TimeoutMilliseconds defaults to 3,000 and accepts 100 through 30,000. After
+    -AllowNetworkChecks approval, EndpointForge performs one time-limited Windows
+    name-resolution operation and returns only a yes-or-no answer, never the resolved
+    addresses.
+
+    HttpEndpointHealth requires one exact HTTP or HTTPS Uri without credentials, a query,
+    fragment, or wildcard. Method defaults to Head and can be Get. ExpectedStatusCode
+    defaults to 200 and accepts 100 through 599. AllowRedirects defaults to false.
+    TimeoutMilliseconds defaults to 5,000 and accepts 100 through 30,000. Normal certificate
+    validation remains enabled. EndpointForge uses the configured proxy without proxy
+    credentials, sends no explicit origin credentials or custom headers, does not include
+    response headers in results, and does not read the response body. When redirects are
+    enabled, it follows at most five, and only when each address keeps the same scheme,
+    host, and port and contains no credentials, query, fragment, or wildcard.
+
+    TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
+    LocalGroupMembership are report-only but observable. Local and fleet commands block
+    them until -AllowNetworkChecks is supplied. A checklist can contain at most 32
+    network-active items and only one WindowsUpdateAvailable item. Review and approve every
+    destination, identity lookup, update option, and purpose before allowing the checks.
+
+PRIVACY AND ANSWER QUALITY
+    FileContainsText returns no matching lines. WindowsEvent returns no event messages or
+    data. Task actions, certificate identity data, process details, unrelated group
+    identities, resolved addresses, HTTP headers and response bodies, and update metadata are omitted. Checklist files
+    still contain their targets, so protect them and their reports according to the
+    organization's data rules.
+
+    A known absence, such as a missing file, freshness target, task, application, process,
+    certificate thumbprint, local group, or direct membership, is false when Windows
+    successfully supplied the evidence. An ordinarily refused or timed-out TCP or HTTP
+    request and an unresolved name are also false when the check completes normally. An
+    inaccessible source, permission failure, incomplete update scan, warning, ambiguous
+    identity lookup, or hard worker timeout is Could not check. Inactive Defender ownership
+    is Not used on this computer. Missing or uncertain evidence is never silently treated
+    as success.
 
 COMMANDS FOR SCRIPTS
     Commands whose names begin with Get or Test return PowerShell objects and do not

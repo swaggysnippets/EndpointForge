@@ -6,12 +6,13 @@ function Get-EFFleetSummary {
     .DESCRIPTION
     Runs the same EndpointForge computer checkup on each named computer and returns one
     combined result. This command never installs EndpointForge, turns on remote
-    management, changes a Windows setting, or runs a fix. A checklist containing TCP port
-    checks can make observable network connections from every remote computer and is
-    blocked unless AllowNetworkChecks is explicitly supplied.
+    management, changes a Windows setting, or runs a fix. TcpPort, DnsResolution,
+    HttpEndpointHealth, WindowsUpdateAvailable, and LocalGroupMembership can create
+    observable activity from every remote computer and are blocked unless
+    AllowNetworkChecks is supplied.
 
     Each remote computer must already allow PowerShell remoting and must already have
-    EndpointForge 0.5.0 or later installed. Your account must have permission to connect.
+    EndpointForge 0.6.0 or later installed. Your account must have permission to connect.
     These requirements are intentionally not changed for you.
 
     EndpointForge calls its list of expected settings and everyday checks a baseline in
@@ -37,9 +38,11 @@ function Get-EFFleetSummary {
     longer. It still does not change a computer.
 
     .PARAMETER AllowNetworkChecks
-    Allows checklist items that make one TCP connection attempt to a named host and port.
-    In a fleet run, each remote computer makes its own attempt. Destinations, firewalls,
-    and monitoring tools may record it. No application data is sent.
+    Allows the five network-active types after every destination, requested account
+    identity, purpose, update-scan option, and source computer has been reviewed. Each
+    remote computer performs its own activity. Contacted services, identity providers,
+    firewalls, proxies, and monitoring tools may record it. This acknowledgement does not
+    grant network authorization.
 
     .PARAMETER MinimumFreeSpacePercent
     The system-drive free-space level that should produce a warning.
@@ -60,7 +63,7 @@ function Get-EFFleetSummary {
     .EXAMPLE
     Get-EFFleetSummary -ComputerName PC-101,PC-102 -Baseline .\Contoso.EverydayChecks.json -AllowNetworkChecks
 
-    Explicitly allows the named TCP checks to run once from each remote computer.
+    Explicitly allows the reviewed network-active checks from each remote computer.
 
     .OUTPUTS
     EndpointForge.FleetSummary
@@ -111,28 +114,27 @@ function Get-EFFleetSummary {
     }
 
     $resolvedBaseline = Resolve-EFBaseline -Baseline $Baseline
-    $networkControls = @($resolvedBaseline.Controls | Where-Object Type -eq 'TcpPort')
+    $networkControls = @($resolvedBaseline.Controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
     if ($networkControls.Count -gt 0 -and -not $AllowNetworkChecks) {
-        $destinationCount = @($networkControls | ForEach-Object {
-            '{0}:{1}' -f $_.HostName, $_.Port
-        } | Select-Object -Unique).Count
+        $networkTypes = @($networkControls.Type | Sort-Object -Unique) -join ', '
         throw [System.InvalidOperationException]::new(
-            "This checklist contains $($networkControls.Count) TCP connection check(s) for $destinationCount destination(s). " +
-            "Across $($targets.Count) computer(s), those attempts would originate from every remote computer and may be recorded. " +
+            "This checklist contains $($networkControls.Count) network-active check(s): $networkTypes. " +
+            "Across $($targets.Count) computer(s), that activity would originate from every remote computer and may be recorded. " +
             'Review the checklist, then add -AllowNetworkChecks to permit them.'
         )
     }
     $startedAtUtc = [DateTime]::UtcNow
     $remoteScript = {
-        param($Checklist, $CollectSoftware, $FreeSpaceThreshold, $UptimeThreshold)
+        param($Checklist, $CollectSoftware, $FreeSpaceThreshold, $UptimeThreshold, $PermitNetworkChecks)
 
-        Import-Module EndpointForge -MinimumVersion 0.5.0 -Force -ErrorAction Stop
+        Import-Module EndpointForge -MinimumVersion 0.6.0 -Force -ErrorAction Stop
         $parameters = @{
             Baseline                = $Checklist
             IncludeSoftware         = [bool]$CollectSoftware
             MinimumFreeSpacePercent = [int]$FreeSpaceThreshold
             MaximumUptimeDays       = [int]$UptimeThreshold
             NoProgress              = $true
+            AllowNetworkChecks      = [bool]$PermitNetworkChecks
         }
         $checkup = Get-EFEndpointSummary @parameters
         [pscustomobject]@{
@@ -144,7 +146,7 @@ function Get-EFFleetSummary {
     $invokeParameters = @{
         ComputerName  = $targets.ToArray()
         ScriptBlock   = $remoteScript
-        ArgumentList  = @($resolvedBaseline, [bool]$IncludeSoftware, $MinimumFreeSpacePercent, $MaximumUptimeDays)
+        ArgumentList  = @($resolvedBaseline, [bool]$IncludeSoftware, $MinimumFreeSpacePercent, $MaximumUptimeDays, [bool]$AllowNetworkChecks)
         ThrottleLimit = $ThrottleLimit
         ErrorAction   = 'SilentlyContinue'
         ErrorVariable = 'fleetRemoteErrors'
@@ -207,7 +209,7 @@ function Get-EFFleetSummary {
             [string]$matchingErrors[0].Exception.Message
         }
         else {
-            'The computer did not return a checkup. Confirm its name, network access, PowerShell remoting permission, and that EndpointForge 0.5.0 or later is already installed there.'
+                'The computer did not return a checkup. Confirm its name, network access, PowerShell remoting permission, and that EndpointForge 0.6.0 or later is already installed there.'
         }
         $failureList.Add([pscustomobject]@{
             PSTypeName   = 'EndpointForge.FleetFailure'

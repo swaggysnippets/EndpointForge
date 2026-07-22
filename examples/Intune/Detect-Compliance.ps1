@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 try {
-    Import-Module EndpointForge -MinimumVersion 0.5.0 -Force
+    Import-Module EndpointForge -MinimumVersion 0.6.0 -Force
     $report = Get-EFComplianceReport -NoProgress
 
     if ($report.IsCompliant) {

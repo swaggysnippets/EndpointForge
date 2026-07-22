@@ -6,10 +6,14 @@ function Get-EFEndpointSummary {
     .DESCRIPTION
     Provides the recommended first check for EndpointForge. It reads computer details,
     everyday health, restart status, and each item in the selected checklist, then
-    explains what needs attention. A checklist can include settings, exact local files,
-    literal text near the end of a log, recent Windows event IDs, and named TCP
-    connections. The command does not apply a fix or change Windows. A TcpPort item does
-    make one real, observable connection attempt and sends no application data.
+    explains what needs attention. A checklist can cover settings, updates, storage,
+    applications, jobs, files, certificates, events, processes, account relationships,
+    and approved network services. The command does not apply a fix or change Windows.
+
+    TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
+    LocalGroupMembership are network-active. They are blocked unless AllowNetworkChecks is
+    supplied. Contacted services, identity providers, or monitoring tools may record the
+    activity.
 
     EndpointForge calls the checklist a baseline in script properties so existing
     automation remains compatible. No knowledge of configuration frameworks is required
@@ -18,14 +22,18 @@ function Get-EFEndpointSummary {
 
     .PARAMETER Baseline
     The list of things expected to be true: a built-in name, JSON path, or validated
-    checklist object. Review custom paths, event queries, hosts, and ports before running
-    it.
+    checklist object. Review every target and network-active item before running it.
 
     .PARAMETER ControlId
     Limits the check to selected checklist item IDs.
 
     .PARAMETER IncludeSoftware
     Includes installed software in the nested Inventory object.
+
+    .PARAMETER AllowNetworkChecks
+    Allows the five network-active types after their destinations, requested account
+    identities, update options, and purposes have been reviewed. This is an explicit
+    acknowledgement, not a network authorization system.
 
     .PARAMETER MinimumFreeSpacePercent
     The system-drive free-space warning threshold.
@@ -43,9 +51,9 @@ function Get-EFEndpointSummary {
     Get-EFEndpointSummary -NoProgress | Show-EFEndpointSummary -Detailed
 
     .EXAMPLE
-    Get-EFEndpointSummary -Baseline .\Contoso.EverydayChecks.json -NoProgress
+    Get-EFEndpointSummary -Baseline .\Contoso.EverydayChecks.json -AllowNetworkChecks -NoProgress
 
-    Includes the custom file, text, event, and network checks in the computer checkup.
+    Includes the expanded everyday checks and approved network activity in the checkup.
 
     .OUTPUTS
     EndpointForge.EndpointSummary
@@ -59,6 +67,8 @@ function Get-EFEndpointSummary {
         [string[]]$ControlId,
 
         [switch]$IncludeSoftware,
+
+        [switch]$AllowNetworkChecks,
 
         [ValidateRange(1, 99)]
         [int]$MinimumFreeSpacePercent = 15,
@@ -85,6 +95,7 @@ function Get-EFEndpointSummary {
         $complianceParameters = @{
             Baseline   = $Baseline
             NoProgress = $true
+            AllowNetworkChecks = [bool]$AllowNetworkChecks
         }
         if ($PSBoundParameters.ContainsKey('ControlId')) {
             $complianceParameters.ControlId = $ControlId

@@ -1,7 +1,7 @@
 function Show-EFMenu {
     <#
     .SYNOPSIS
-    Opens the beginner-friendly EndpointForge menu.
+    Opens the user-friendly EndpointForge menu.
 
     .DESCRIPTION
     Helps a person check one or more Windows computers, understand the results, preview
@@ -9,10 +9,12 @@ function Show-EFMenu {
     Every choice explains whether it reads information, writes a file, or can change a
     Windows setting.
 
-    A checklist is a list of things expected to be true, such as a Windows setting, a
-    required file, a recent event, or an available network service. Scripts call it a
-    baseline. Selecting a checklist never runs it. A computer check and a preview never
-    change Windows, although a TCP item makes one observable network connection attempt.
+    A checklist is a list of things expected to be true, such as a Windows setting,
+    restart state, update state, application, job, file, certificate, event, account
+    relationship, or approved network service. Scripts call it a baseline. Selecting a
+    checklist never runs it. A computer check and a preview never change Windows, although
+    network-active items can contact an approved TCP, name-resolution, web, configured
+    update, or identity service after explicit approval.
 
     Applying a supported fix requires selecting the item, completing a fresh preview,
     running PowerShell as Administrator, and typing APPLY exactly. EndpointForge records
@@ -126,7 +128,7 @@ function Show-EFMenu {
         throw [System.ArgumentException]::new("The starting checklist could not be used: $($_.Exception.Message)", $_.Exception)
     }
     $activeBaseline = $Baseline
-    $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+    $readiness = Get-EFEndpointReadiness -Baseline $resolvedBaseline
 
     $history = [Collections.Generic.List[object]]::new()
     $menuErrors = [Collections.Generic.List[object]]::new()
@@ -139,6 +141,7 @@ function Show-EFMenu {
     $lastFleet = $null
     $lastExportPath = $null
     $networkNoticeState = [pscustomobject]@{ ChecklistKey = '' }
+    $localNetworkApprovalState = [pscustomobject]@{ ChecklistKey = '' }
     $actionCount = 0
     $exitReason = 'Quit'
     $isAdministrator = Test-EFAdministrator
@@ -154,17 +157,80 @@ function Show-EFMenu {
             Message    = $Message
         })
     }
+    $writeNetworkApprovalDetails = {
+        param([object[]]$Controls, [bool]$ForFleet)
+
+        Write-EFMenuLine -Text 'Network activity that is about to be allowed:' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+        foreach ($networkControl in @($Controls)) {
+            $detail = switch ([string]$networkControl.Type) {
+                'TcpPort' {
+                    "TCP connection to $($networkControl.HostName):$($networkControl.Port); timeout $([int](Get-EFPropertyValue $networkControl 'TimeoutMilliseconds' 3000)) ms"
+                }
+                'DnsResolution' {
+                    "DNS lookup for $($networkControl.HostName); timeout $([int](Get-EFPropertyValue $networkControl 'TimeoutMilliseconds' 3000)) ms"
+                }
+                'HttpEndpointHealth' {
+                    $redirectText = if ([bool](Get-EFPropertyValue $networkControl 'AllowRedirects' $false)) {
+                        'up to 5 same-origin redirects allowed; cross-origin redirects blocked'
+                    }
+                    else { 'redirects blocked' }
+                    "Web $([string](Get-EFPropertyValue $networkControl 'Method' 'Head').ToUpperInvariant()) request to $($networkControl.Uri); expects status $([int](Get-EFPropertyValue $networkControl 'ExpectedStatusCode' 200)); $redirectText; timeout $([int](Get-EFPropertyValue $networkControl 'TimeoutMilliseconds' 5000)) ms"
+                }
+                'WindowsUpdateAvailable' {
+                    $sourceText = 'the Windows-configured update service'
+                    if (-not $ForFleet) {
+                        try {
+                            $configuredSource = [string](Get-ItemPropertyValue -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' -Name WUServer -ErrorAction Stop)
+                            $parsedSource = $null
+                            if ([uri]::TryCreate($configuredSource, [UriKind]::Absolute, [ref]$parsedSource) -and
+                                $parsedSource.Scheme -in @('http', 'https')) {
+                                $sourceHost = if ($parsedSource.DnsSafeHost -match ':') {
+                                    "[$($parsedSource.DnsSafeHost)]"
+                                }
+                                else { $parsedSource.DnsSafeHost }
+                                $sourcePort = if ($parsedSource.IsDefaultPort) { '' } else { ":$($parsedSource.Port)" }
+                                $sourceText = "$($parsedSource.Scheme)://$sourceHost$sourcePort (path and sensitive URL components hidden)"
+                            }
+                        }
+                        catch { Write-Verbose 'No organization-managed Windows Update URL was available for the approval screen.' }
+                    }
+                    $optionalText = if ([bool](Get-EFPropertyValue $networkControl 'IncludeOptional' $false)) { 'includes optional updates' } else { 'excludes optional updates' }
+                    $driverText = if ([bool](Get-EFPropertyValue $networkControl 'IncludeDrivers' $false)) { 'includes drivers' } else { 'excludes drivers' }
+                    "Windows Update scan using $sourceText; $optionalText; $driverText; timeout $([int](Get-EFPropertyValue $networkControl 'TimeoutSeconds' 120)) s"
+                }
+                'LocalGroupMembership' {
+                    "Account lookup for '$($networkControl.MemberName)' while checking local group '$($networkControl.GroupName)'; Windows may contact an organizational identity provider"
+                }
+                default { "Network-active checklist item $($networkControl.Id)" }
+            }
+            Write-EFMenuLine -Text ("- {0}: {1}" -f $networkControl.Title, $detail) -NoColor:$effectiveNoColor -Width $width -Indent 2
+        }
+    }
     $getNewSummary = {
-        $networkControls = @($resolvedBaseline.Controls | Where-Object Type -eq 'TcpPort')
+        $networkControls = @($resolvedBaseline.Controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
         $checklistKey = '{0}|{1}' -f $resolvedBaseline.Name, $resolvedBaseline.Version
         if ($networkControls.Count -gt 0 -and $networkNoticeState.ChecklistKey -ne $checklistKey) {
+            $networkTypeSummary = @($networkControls | Group-Object Type | ForEach-Object {
+                '{0} {1}' -f $_.Count, $_.Name
+            }) -join ', '
             Write-EFMenuLine -Text (
-                "[NETWORK NOTE] This checklist contains $($networkControls.Count) connection check(s). " +
-                'EndpointForge will briefly contact each named host and port, then disconnect without sending application data. The destination may record the attempt.'
+                "[NETWORK NOTE] This checklist contains $($networkControls.Count) network-active check(s): $networkTypeSummary. " +
+                'They can contact named TCP, DNS, web, or identity services, or this computer configured update service. Those systems may record the activity.'
             ) -Color Yellow -NoColor:$effectiveNoColor -Width $width
             $networkNoticeState.ChecklistKey = $checklistKey
         }
-        Get-EFEndpointSummary -Baseline $activeBaseline @menuSummaryParameters
+        if ($networkControls.Count -gt 0 -and $localNetworkApprovalState.ChecklistKey -ne $checklistKey) {
+            & $writeNetworkApprovalDetails $networkControls $false
+            Write-EFMenuLine -Text '[CONFIRM NETWORK ACTIVITY] Review every target and purpose. The custom web probe sends no origin or proxy credentials. Windows Update and account resolution follow Windows-configured service and identity behavior. DNS answers and web response details are not included in results.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+            $networkApproval = Read-EFMenuInput -Prompt 'Type NETWORK to allow these checks for this checklist; anything else cancels'
+            if ($networkApproval -cne 'NETWORK') {
+                Write-EFMenuLine -Text '[CANCELLED] No network-active checklist item was run.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                return $null
+            }
+            $localNetworkApprovalState.ChecklistKey = $checklistKey
+        }
+        Get-EFEndpointSummary -Baseline $resolvedBaseline @menuSummaryParameters `
+            -AllowNetworkChecks:($networkControls.Count -gt 0)
     }
     $pause = {
         if ($skipPauses) { return $true }
@@ -188,6 +254,21 @@ function Show-EFMenu {
             Write-EFMenuLine -Text ("Why: {0}" -f (Get-EFPropertyValue $item 'WhyItMatters' $item.Description)) -NoColor:$effectiveNoColor -Width $width -Indent 4
             Write-EFMenuLine -Text ("How: {0}" -f (Get-EFPropertyValue $item 'HowChecked' 'EndpointForge reads only the information needed for this item.')) -NoColor:$effectiveNoColor -Width $width -Indent 4
             Write-EFMenuLine -Text ("If it does not match: {0}." -f $fixText) -NoColor:$effectiveNoColor -Width $width -Indent 4
+        }
+    }
+    $writeChecklistTypeCatalog = {
+        Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'Everything EndpointForge can check' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'These are available building blocks for a checklist. Viewing them does not run a check, contact a service, or change Windows.' -Color Green -NoColor:$effectiveNoColor -Width $width
+        $lastCategory = ''
+        foreach ($catalogItem in @(Get-EFChecklistTypeCatalog)) {
+            if ($catalogItem.Category -ne $lastCategory) {
+                Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                Write-EFMenuLine -Text $catalogItem.Category -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                $lastCategory = $catalogItem.Category
+            }
+            Write-EFMenuLine -Text ("- {0}" -f $catalogItem.Question) -NoColor:$effectiveNoColor -Width $width -Indent 2
+            Write-EFMenuLine -Text ("How it behaves: {0}. Checklist type: {1}." -f $catalogItem.Activity, $catalogItem.Type) -NoColor:$effectiveNoColor -Width $width -Indent 4
         }
     }
 
@@ -214,7 +295,7 @@ function Show-EFMenu {
 
         Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text 'EndpointForge - Windows computer helper' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text 'Checks health, settings, files, events, and connections; explains problems; and safely previews supported fixes.' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'Checks updates, restarts, storage, security, applications, jobs, files, certificates, events, access, and approved connections.' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text ('=' * [math]::Min(72, $width)) -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text 'THIS SESSION' -Color Cyan -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text ("Computer: {0}{1}" -f $computerName, $(if ($isRemoteSession) { ' (connected remotely)' } else { '' })) -NoColor:$effectiveNoColor -Width $width
@@ -233,7 +314,7 @@ function Show-EFMenu {
         Write-EFMenuLine -Text '2. Understand the latest results        [does not change Windows]' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text '3. Fix selected problems safely         [can change settings after approval]' -Color Yellow -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text '4. Save reports or compare checks       [creates files only when you choose Save]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '5. Check other computers                [no setting changes; TCP items contact named hosts]' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '5. Check other computers                [no setting changes; network-active items need approval]' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text '6. Change what EndpointForge checks     [does not change Windows]' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text 'A. Tools for IT scripts and troubleshooting' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text 'H. Help - explain every choice' -NoColor:$effectiveNoColor -Width $width
@@ -251,7 +332,7 @@ function Show-EFMenu {
                     $actionCount++
                     Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
                     Write-EFMenuLine -Text 'Checking this computer' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'This check does not change Windows. A TCP item, if present, makes one brief connection that may be recorded.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'This check does not change Windows. Network-active items, if present, require approval and may be recorded by the contacted service or network tools.' -Color Green -NoColor:$effectiveNoColor -Width $width
                     if (-not $readiness.AssessmentReady) {
                         Write-EFMenuReadiness -Readiness $readiness -NoColor:$effectiveNoColor -Width $width
                         & $addHistory 'Computer check' 'Blocked' $readiness.Summary
@@ -260,6 +341,11 @@ function Show-EFMenu {
                     }
                     if ($null -ne $lastSummary) { $previousSummary = $lastSummary }
                     $lastSummary = & $getNewSummary
+                    if ($null -eq $lastSummary) {
+                        & $addHistory 'Computer check' 'Cancelled' 'Network-active checks were not approved.'
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                        break
+                    }
                     $lastPlan = $null
                     $lastPreview = $null
                     if ($null -ne $previousSummary) {
@@ -289,6 +375,11 @@ function Show-EFMenu {
                                 if ($null -eq $lastSummary) {
                                     Write-EFMenuLine -Text 'No check exists yet, so EndpointForge will run a read-only check now.' -Color Cyan -NoColor:$effectiveNoColor -Width $width
                                     $lastSummary = & $getNewSummary
+                                    if ($null -eq $lastSummary) {
+                                        & $addHistory 'Computer check' 'Cancelled' 'Network-active checks were not approved.'
+                                        if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ResultsLoop }
+                                        continue ResultsLoop
+                                    }
                                 }
                                 if ($_ -eq '1') {
                                     $null = Show-EFEndpointSummary -InputObject $lastSummary -NoColor:$effectiveNoColor
@@ -339,9 +430,15 @@ function Show-EFMenu {
                     if ($null -eq $lastSummary) {
                         Write-EFMenuLine -Text 'A read-only check is needed first. Running it now...' -NoColor:$effectiveNoColor -Width $width
                         $lastSummary = & $getNewSummary
+                        if ($null -eq $lastSummary) {
+                            & $addHistory 'Computer check' 'Cancelled' 'Network-active checks were not approved.'
+                            if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                            break
+                        }
                     }
                     $beforeFixSummary = $lastSummary
-                    $lastPlan = Get-EFRemediationPlan -Baseline $activeBaseline -NoProgress:$NoProgress
+                    $lastPlan = Get-EFRemediationPlan -Baseline $resolvedBaseline -NoProgress:$NoProgress `
+                        -AllowNetworkChecks:($localNetworkApprovalState.ChecklistKey -ne '')
                     Write-EFMenuPlan -Plan $lastPlan -NoColor:$effectiveNoColor -Width $width
                     if ([int]$lastPlan.AutomaticCount -eq 0) {
                         Write-EFMenuLine -Text '[NO SUPPORTED FIXES] Review the manual guidance above. EndpointForge will not change those items.' -Color Green -NoColor:$effectiveNoColor -Width $width
@@ -359,7 +456,7 @@ function Show-EFMenu {
                     }
 
                     Write-EFMenuLine -Text 'Running the required preview now. A preview cannot change Windows...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    $lastPreview = Invoke-EFEndpointRemediation -Baseline $activeBaseline -ControlId $selectedControlIds `
+                    $lastPreview = Invoke-EFEndpointRemediation -Baseline $resolvedBaseline -ControlId $selectedControlIds `
                         -NoProgress:$NoProgress -WhatIf -Confirm:$false
                     Write-EFMenuRemediationReport -Report $lastPreview -NoColor:$effectiveNoColor -Width $width
                     if ([int]$lastPreview.FailureCount -gt 0) {
@@ -400,7 +497,7 @@ function Show-EFMenu {
                         break
                     }
 
-                    $lastRemediation = Invoke-EFEndpointRemediation -Baseline $activeBaseline -ControlId $selectedControlIds `
+                    $lastRemediation = Invoke-EFEndpointRemediation -Baseline $resolvedBaseline -ControlId $selectedControlIds `
                         -NoProgress:$NoProgress -Confirm:$false
                     Write-EFMenuRemediationReport -Report $lastRemediation -NoColor:$effectiveNoColor -Width $width
                     Write-EFMenuLine -Text 'Running a fresh read-only check to verify the result...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
@@ -493,8 +590,8 @@ function Show-EFMenu {
                     $actionCount++
                     Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
                     Write-EFMenuLine -Text 'Check other computers - no Windows setting changes' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'EndpointForge will not install itself, turn on remote access, change settings, or run fixes on those computers. TCP checklist items can make brief, observable network connections from each computer.' -Color Green -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'Before this works, each computer must already allow PowerShell remoting, already have EndpointForge 0.5.0 or later installed, and allow your signed-in account to connect.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'EndpointForge will not install itself, turn on remote access, change settings, or run fixes on those computers. Approved network-active checklist items can contact TCP, DNS, web, identity, or update services from each computer.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'Before this works, each computer must already allow PowerShell remoting, already have EndpointForge 0.6.0 or later installed, and allow your signed-in account to connect.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
                     $targetInput = Read-EFMenuInput -Prompt 'Computer names separated by commas; enter B to cancel'
                     if ($null -eq $targetInput -or $targetInput.Trim() -match '^(?i:B|BACK|Q)$') {
                         Write-EFMenuLine -Text '[CANCELLED] No other computer was contacted.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
@@ -504,15 +601,16 @@ function Show-EFMenu {
                         if ($targetNames.Count -eq 0) { throw [System.ArgumentException]::new('Enter at least one computer name.') }
                         $fleetApproved = $true
                         $allowFleetNetworkChecks = $false
-                        $networkControls = @($resolvedBaseline.Controls | Where-Object Type -eq 'TcpPort')
+                        $networkControls = @($resolvedBaseline.Controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
                         if ($networkControls.Count -gt 0) {
-                            $destinationCount = @($networkControls | ForEach-Object {
-                                '{0}:{1}' -f $_.HostName, $_.Port
-                            } | Select-Object -Unique).Count
+                            $networkTypeSummary = @($networkControls | Group-Object Type | ForEach-Object {
+                                '{0} {1}' -f $_.Count, $_.Name
+                            }) -join ', '
                             Write-EFMenuLine -Text (
-                                "[CONFIRM NETWORK ACTIVITY] Each of $($targetNames.Count) computer(s) will make $($networkControls.Count) brief TCP attempt(s) across $destinationCount destination(s). " +
-                                'The destinations or network monitoring tools may record them. No application data is sent.'
+                                "[CONFIRM NETWORK ACTIVITY] Each of $($targetNames.Count) computer(s) will run $($networkControls.Count) network-active item(s): $networkTypeSummary. " +
+                                'Named or configured services and network monitoring tools may record the activity.'
                             ) -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                            & $writeNetworkApprovalDetails $networkControls $true
                             $networkApproval = Read-EFMenuInput -Prompt 'Type NETWORK to allow these connection checks; anything else cancels'
                             if ($networkApproval -cne 'NETWORK') {
                                 $fleetApproved = $false
@@ -524,7 +622,7 @@ function Show-EFMenu {
                             }
                         }
                         if ($fleetApproved) {
-                            $lastFleet = Get-EFFleetSummary -ComputerName $targetNames -Baseline $activeBaseline `
+                            $lastFleet = Get-EFFleetSummary -ComputerName $targetNames -Baseline $resolvedBaseline `
                                 -IncludeSoftware:$IncludeSoftware -AllowNetworkChecks:$allowFleetNetworkChecks
                             Write-EFMenuFleetSummary -Fleet $lastFleet -NoColor:$effectiveNoColor -Width $width
                             & $addHistory 'Check other computers' 'Completed' $lastFleet.Summary
@@ -539,13 +637,14 @@ function Show-EFMenu {
                         Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text 'Change what EndpointForge checks' -Color Cyan -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text 'A checklist describes things you expect to be true. Selecting, viewing, validating, or creating one does not run checks or change Windows.' -Color Green -NoColor:$effectiveNoColor -Width $width
-                        Write-EFMenuLine -Text 'Custom checklists can include required files, exact text near the end of a log, recent Windows event IDs, and named TCP connections.' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Custom checklists can cover restarts, updates, storage, applications, scheduled jobs, required files, exact text near the end of a log, certificates, Windows event IDs, access, and approved network connection examples.' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text ("Current checklist: {0} {1}" -f $resolvedBaseline.Name, $resolvedBaseline.Version) -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text '1. Use the built-in recommended checklist' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text '2. Load my organization''s checklist JSON file' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text '3. Explain every item in the current checklist' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text '4. Check whether a checklist file is valid' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text '5. Create an editable settings or everyday-check template' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '6. See everything EndpointForge can check' -NoColor:$effectiveNoColor -Width $width
                         Write-EFMenuLine -Text 'B. Back to the main menu' -NoColor:$effectiveNoColor -Width $width
                         $checklistChoice = Read-EFMenuInput -Prompt 'Choose a checklist action'
                         if ($null -eq $checklistChoice) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
@@ -554,8 +653,9 @@ function Show-EFMenu {
                                 $actionCount++
                                 $activeBaseline = 'EnterpriseRecommended'
                                 $resolvedBaseline = Resolve-EFBaseline -Baseline $activeBaseline
-                                $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+                                $readiness = Get-EFEndpointReadiness -Baseline $resolvedBaseline
                                 $networkNoticeState.ChecklistKey = ''
+                                $localNetworkApprovalState.ChecklistKey = ''
                                 $lastSummary = $null; $previousSummary = $null; $lastComparison = $null
                                 $lastPlan = $null; $lastPreview = $null; $lastRemediation = $null; $lastFleet = $null
                                 Write-EFMenuLine -Text '[SELECTED] The built-in recommended checklist is active. Earlier results were cleared so they cannot be confused with this checklist.' -Color Green -NoColor:$effectiveNoColor -Width $width
@@ -572,8 +672,9 @@ function Show-EFMenu {
                                     $candidate = Resolve-EFBaseline -Baseline $checklistPath.Trim()
                                     $activeBaseline = $checklistPath.Trim()
                                     $resolvedBaseline = $candidate
-                                    $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+                                    $readiness = Get-EFEndpointReadiness -Baseline $resolvedBaseline
                                     $networkNoticeState.ChecklistKey = ''
+                                    $localNetworkApprovalState.ChecklistKey = ''
                                     $lastSummary = $null; $previousSummary = $null; $lastComparison = $null
                                     $lastPlan = $null; $lastPreview = $null; $lastRemediation = $null; $lastFleet = $null
                                     Write-EFMenuLine -Text ("[SELECTED] {0} {1}. Earlier results were cleared." -f $resolvedBaseline.Name, $resolvedBaseline.Version) -Color Green -NoColor:$effectiveNoColor -Width $width
@@ -608,7 +709,7 @@ function Show-EFMenu {
                                 $actionCount++
                                 Write-EFMenuLine -Text 'This creates editable JSON and schema files. It does not run a check or apply settings. An IT administrator must review the file before use.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
                                 Write-EFMenuLine -Text '1. Windows settings starter - firewall, sign-in protection, and Windows Update examples' -NoColor:$effectiveNoColor -Width $width
-                                Write-EFMenuLine -Text '2. Everyday checks - editable file, log text, event ID, and network connection examples' -NoColor:$effectiveNoColor -Width $width
+                                Write-EFMenuLine -Text '2. Everyday checks - editable health, application, job, file, certificate, access, and network examples' -NoColor:$effectiveNoColor -Width $width
                                 Write-EFMenuLine -Text '   Everyday checks contain fictional Contoso targets and must be edited before they are run.' -Color Yellow -NoColor:$effectiveNoColor -Width $width -Indent 2
                                 $templateChoice = Read-EFMenuInput -Prompt 'Choose 1 or 2; press Enter to cancel'
                                 $newTemplate = switch ($templateChoice) {
@@ -630,7 +731,7 @@ function Show-EFMenu {
                                         -Description "Editable $newTemplate checklist for $($newName.Trim()). Review before use."
                                     Write-EFMenuLine -Text ("[CREATED] {0}" -f $created.Path) -Color Green -NoColor:$effectiveNoColor -Width $width
                                     if ($newTemplate -eq 'EverydayChecks') {
-                                        Write-EFMenuLine -Text 'Replace every Contoso path, text, event source and ID, host, and port before use.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                        Write-EFMenuLine -Text 'Replace every Contoso application, job, path, text, event, certificate, account, host, port, and web address before use.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
                                     }
                                     Write-EFMenuLine -Text 'The file was not selected or run. Review it, validate it, then load it with option 2.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
                                     & $addHistory 'Create checklist' 'Completed' $created.Path
@@ -640,8 +741,14 @@ function Show-EFMenu {
                                 }
                                 if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
                             }
+                            '6' {
+                                $actionCount++
+                                & $writeChecklistTypeCatalog
+                                & $addHistory 'Checklist capabilities' 'Viewed' '24 supported checklist item types displayed.'
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                            }
                             { $_ -in @('B', 'BACK', 'Q') } { break ChecklistLoop }
-                            default { Write-EFMenuLine -Text '[INVALID] Choose 1-5 or B.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                            default { Write-EFMenuLine -Text '[INVALID] Choose 1-6 or B.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
                         }
                     }
                     if (-not $running) { break MainLoop }
@@ -662,7 +769,7 @@ function Show-EFMenu {
                         switch ($toolChoice.Trim().ToUpperInvariant()) {
                             '1' {
                                 $actionCount++
-                                $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+                                $readiness = Get-EFEndpointReadiness -Baseline $resolvedBaseline
                                 Write-EFMenuReadiness -Readiness $readiness -NoColor:$effectiveNoColor -Width $width
                                 & $addHistory 'Readiness details' 'Viewed' $readiness.Status
                                 if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ToolsLoop }

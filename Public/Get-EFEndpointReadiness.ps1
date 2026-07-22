@@ -6,13 +6,16 @@ function Get-EFEndpointReadiness {
     .DESCRIPTION
     Performs a non-changing preflight. It checks the Windows platform, the selected
     checklist, administrator access, remote-session context, and whether Windows provides
-    the features needed by each checklist item. It does not run the checklist. TCP items
-    are identified because running them later makes a brief, observable connection.
+    the features needed by each checklist item. It does not run the checklist. It
+    identifies network-active items because running them later can contact a named server,
+    name-resolution service, web address, configured Windows Update service, or identity
+    provider while resolving a requested local-group account name.
 
-    EndpointForge calls its list of expected settings a baseline. In beginner-facing
+    EndpointForge calls its list of expected settings a baseline. In user-friendly
     guidance, this command calls it a checklist: a list of things expected to be true,
-    including settings, files, recent events, or network availability. Selecting a
-    checklist does not run it or apply it.
+    including settings, updates, storage, applications, jobs, files, certificates, events,
+    account relationships, or network availability. Selecting a checklist does not run it
+    or apply it.
 
     .PARAMETER Baseline
     The checklist to inspect. Supply the built-in name, a custom JSON path, or a validated
@@ -95,7 +98,7 @@ function Get-EFEndpointReadiness {
     $automaticFixCount = @($capabilities | Where-Object IsAutomaticFixDeclared).Count
     $availableAutomaticFixCount = @($capabilities | Where-Object AutomaticFixAvailable).Count
     $fixNowCount = @($capabilities | Where-Object CanFixNow).Count
-    $networkCheckCount = @($capabilities | Where-Object Type -eq 'TcpPort').Count
+    $networkCheckCount = @($controls | Where-Object { Test-EFControlUsesNetwork -Control $_ }).Count
 
     $assessmentReady = $isWindowsPlatform -and $baselineIsValid
     $completeCheckLikely = $assessmentReady -and $unavailableControlCount -eq 0 -and
@@ -123,7 +126,7 @@ function Get-EFEndpointReadiness {
     }
     if ($networkCheckCount -gt 0) {
         $limitations.Add(
-            "$networkCheckCount checklist item(s) will make one TCP connection attempt when run. The destination or network monitoring tools may record it."
+            "$networkCheckCount checklist item(s) can contact an approved TCP destination, DNS service, web address, or configured update service when run. Those systems or network monitoring tools may record the activity."
         )
     }
 
@@ -141,7 +144,7 @@ function Get-EFEndpointReadiness {
     $summary = switch ($status) {
         'Blocked' { 'EndpointForge cannot start this checklist until the blocked item is corrected.' }
         'Limited' { 'EndpointForge can check this PC now, but some details or automatic fixes may be unavailable.' }
-        default { 'EndpointForge is ready to check this PC. The check does not change Windows; review the Network activity line for any TCP connection items.' }
+        default { 'EndpointForge is ready to check this PC. The check does not change Windows; review the Network activity line before allowing any network-active items.' }
     }
     $nextStep = if (-not $isWindowsPlatform) {
         'Run EndpointForge on the Windows PC you want to check.'
@@ -211,15 +214,15 @@ function Get-EFEndpointReadiness {
         Name = 'Network activity'
         Status = if ($networkCheckCount -gt 0) { 'Warning' } elseif ($assessmentReady) { 'Ready' } else { 'Blocked' }
         PlainLanguage = if ($networkCheckCount -gt 0) {
-            "$networkCheckCount checklist item(s) will briefly contact a named network host and port when the checklist is run. No application data is sent, but the attempt may be recorded."
+            "$networkCheckCount checklist item(s) can contact a named TCP destination, DNS service, web address, configured update service, or identity provider for the requested account when the checklist is run. The activity may be recorded."
         }
         elseif ($assessmentReady) {
-            'This checklist does not contain TCP connection checks.'
+            'This checklist does not contain network-active checks.'
         }
         else {
             'Network activity can be described after the checklist is ready.'
         }
-        NextStep = if ($networkCheckCount -gt 0) { 'Review each TcpPort item and confirm that its destination is approved.' } else { 'No action is needed.' }
+        NextStep = if ($networkCheckCount -gt 0) { 'Review every network-active item and confirm that its destination, requested identity, and purpose are approved.' } else { 'No action is needed.' }
     })
     $checks.Add([pscustomobject]@{
         PSTypeName = 'EndpointForge.ReadinessCheck'

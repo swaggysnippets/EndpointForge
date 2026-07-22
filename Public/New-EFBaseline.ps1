@@ -5,10 +5,11 @@ function New-EFBaseline {
 
     .DESCRIPTION
     A checklist is a list of things you expect to be true, such as a Windows setting,
-    required file, recent event, or available network service; scripts call it a
-    baseline. This command copies a maintained starter template, validates it, and writes
-    UTF-8 JSON plus its schema. It does not apply the checklist or change Windows. A
-    PowerShell WhatIf preview creates no files, and existing files require Force.
+    restart state, update state, application, job, file, certificate, event, account
+    relationship, or approved network service; scripts call it a baseline. This command
+    copies a maintained starter template, validates it, and writes UTF-8 JSON plus its
+    schema. It does not apply the checklist or change Windows. A PowerShell WhatIf preview
+    creates no files, and existing files require Force.
 
     .PARAMETER Name
     A stable organization checklist name such as Contoso.Workstation.
@@ -25,8 +26,9 @@ function New-EFBaseline {
     .PARAMETER Template
     Starter includes firewall, UAC, and Windows Update controls;
     EnterpriseRecommended includes every built-in setting; AuditOnly includes only
-    BitLocker, Secure Boot, and TPM checks. EverydayChecks creates four report-only,
-    edit-before-use examples for a file, text log, Windows event, and TCP connection.
+    BitLocker, Secure Boot, and TPM checks. EverydayChecks creates edit-before-use,
+    report-only examples for computer health, updates, applications, jobs, files, logs,
+    certificates, access, events, and approved network connections.
 
     .PARAMETER Force
     Replaces an existing checklist file.
@@ -138,7 +140,7 @@ function New-EFBaseline {
         Baseline     = $createdBaseline
         NextSteps    = @(
             $(if ($Template -eq 'EverydayChecks') {
-                "Replace every sample file path, search text, event source and ID, host, and port before use: $targetPath"
+                "Replace every sample application, job, path, text, event, certificate, account, host, port, and web address before use: $targetPath"
             } else {
                 "Edit and review: $targetPath"
             })

@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions should preserve EndpointForge's automation contracts: Windows PowerShell 5.1 compatibility, structured output, beginner-readable presentation, idempotent evaluation, no automatic restarts, no remote code download, and `SupportsShouldProcess` for state changes.
+Contributions should preserve EndpointForge's automation contracts: Windows PowerShell 5.1 compatibility, structured output, user-friendly presentation, idempotent evaluation, no automatic restarts, no remote code download, and `SupportsShouldProcess` for state changes.
 
 ## Development
 
@@ -27,7 +27,7 @@ New report-only control types require:
   a value that could not be checked;
 - strict validation of exact targets, bounded work, and tests for invalid, inaccessible,
   changing, and unexpectedly large input;
-- beginner-readable `WhyItMatters`, `HowChecked`, `ManualAction`, `SafetyNotes`, and
+- user-friendly `WhyItMatters`, `HowChecked`, `ManualAction`, `SafetyNotes`, and
   privacy wording in the example checklist;
 - no automatic remediation, restart request, or suggestion that EndpointForge repaired
   the reported condition; and
@@ -40,6 +40,36 @@ read. Event readers must bound the time window, event ID count, and returned cou
 checks must use exact destinations, a bounded timeout, no retries by default, and no
 application payload. Their help, menu, example, validation output, and security guidance
 must state that the connection attempt can be observed and recorded.
+
+Application discovery must read explicit uninstall registry views and must not query
+`Win32_Product` or trigger Windows Installer consistency checks. Keep application checks
+bounded, validate compatible scope and architecture combinations, and return an unavailable
+answer when requested version evidence cannot be compared reliably. Scheduled-task results
+must omit actions and arguments, handle never-run sentinels explicitly, and compare ages in
+UTC. Certificate readers must open stores read-only, compare validity in UTC, and omit
+subjects, names, raw certificate data, and private-key details. Process checks must omit
+IDs, paths, owners, command lines, modules, and process contents. Local-group checks must
+resolve only the requested account, inspect direct members as raw SIDs, cap enumeration,
+avoid resolving unrelated names, and never expand nested membership.
+
+`TcpPort`, `DnsResolution`, `HttpEndpointHealth`, `WindowsUpdateAvailable`, and
+`LocalGroupMembership` are the five network-active types. Local and fleet entry points must
+block them without explicit `-AllowNetworkChecks` acknowledgement. DNS checks must accept
+only absolute multi-label names and omit returned addresses. HTTP checks must retain normal
+certificate validation, send no explicit origin or proxy credentials or custom headers,
+avoid reading the response body or including response headers in results, and disable
+redirects by default. When enabled, redirects must be capped at five and restricted to safe
+same-origin addresses. Windows Update checks must use the configured update service,
+enforce cancellation and a hard timeout, return only a bounded count, and never download,
+install, accept licenses, change update settings, or restart Windows. Local-group checks
+must explain that resolving the requested account name can contact an identity provider and
+that a direct SID avoids name resolution.
+
+Preserve the difference between a known mismatch and an unavailable answer. An ordinary
+TCP or HTTP refusal or timeout and a normally completed unresolved-name check are known
+mismatches. Provider failures, permission failures, incomplete update results, scan
+warnings, ambiguous identity resolution, untrustworthy evidence, and hard worker timeouts
+are unavailable answers, never passing results.
 
 New remediating control types require:
 

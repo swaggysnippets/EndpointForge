@@ -1,11 +1,11 @@
 @{
     RootModule        = 'EndpointForge.psm1'
-    ModuleVersion     = '0.5.0'
+    ModuleVersion     = '0.6.0'
     GUID              = '7566d24f-23a9-4481-8cb1-a5ad1e8a013d'
     Author            = 'Logan Bamborough'
     CompanyName       = 'Logan Bamborough'
     Copyright         = '(c) 2026 Logan Bamborough. All rights reserved.'
-    Description       = 'Beginner-friendly, enterprise-safe Windows computer checkups with guided menus, plain-language findings, guarded fix previews, comparisons, fleet checks, and self-contained reports.'
+    Description       = 'User-friendly, enterprise-safe Windows computer checkups with guided menus, plain-language findings, guarded fix previews, comparisons, fleet checks, and self-contained reports.'
     PowerShellVersion = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
     HelpInfoURI       = 'https://github.com/swaggysnippets/EndpointForge/blob/main/README.md'
@@ -42,11 +42,12 @@
             Tags = @(
                 'Windows', 'Endpoint', 'Enterprise', 'Automation', 'Compliance',
                 'Inventory', 'Remediation', 'Security', 'Intune', 'RMM', 'Report', 'HTML', 'Fleet',
-                'Diagnostics', 'EventLog', 'Monitoring', 'TCP'
+                'Diagnostics', 'EventLog', 'Monitoring', 'TCP', 'WindowsUpdate', 'DNS', 'HTTP',
+                'Certificate', 'ScheduledTask'
             )
             LicenseUri = 'https://opensource.org/license/mit'
             ProjectUri = 'https://github.com/swaggysnippets/EndpointForge'
-            ReleaseNotes = 'Adds beginner-friendly report-only checks for exact local files, literal text near the end of logs, recent Windows event IDs, and bounded TCP connections; an editable EverydayChecks template; clear menu explanations; privacy-safe results; and explicit opt-in before TCP checks fan out across a fleet.'
+            ReleaseNotes = 'Adds 12 report-only checklist types for pending restarts, disk space, available Windows updates, installed applications, scheduled job health, Defender definition age, file freshness, certificate expiry, DNS, HTTP endpoints, running programs, and local group membership. Includes a 24-item capability guide, expanded editable examples, privacy-minimized results, bounded checks, and explicit approval for network-active items.'
         }
     }
 }

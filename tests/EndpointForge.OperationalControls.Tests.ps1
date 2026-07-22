@@ -15,23 +15,39 @@ Describe 'Everyday checklist validation' {
             -Raw -Encoding UTF8 | ConvertFrom-Json
     }
 
-    It 'validates all four report-only everyday item types' {
+    It 'validates all sixteen report-only everyday item types' {
         InModuleScope EndpointForge -Parameters @{ Candidate = $script:EverydayBaseline } {
             { Assert-EFBaseline -Baseline $Candidate } | Should -Not -Throw
             @($Candidate.Controls.Type) | Should -Contain 'FileExists'
             @($Candidate.Controls.Type) | Should -Contain 'FileContainsText'
             @($Candidate.Controls.Type) | Should -Contain 'WindowsEvent'
             @($Candidate.Controls.Type) | Should -Contain 'TcpPort'
+            @($Candidate.Controls.Type) | Should -Contain 'PendingRestart'
+            @($Candidate.Controls.Type) | Should -Contain 'DiskSpace'
+            @($Candidate.Controls.Type) | Should -Contain 'WindowsUpdateAvailable'
+            @($Candidate.Controls.Type) | Should -Contain 'InstalledApplication'
+            @($Candidate.Controls.Type) | Should -Contain 'ScheduledTaskHealth'
+            @($Candidate.Controls.Type) | Should -Contain 'DefenderSignatureHealth'
+            @($Candidate.Controls.Type) | Should -Contain 'FileFreshness'
+            @($Candidate.Controls.Type) | Should -Contain 'CertificateExpiry'
+            @($Candidate.Controls.Type) | Should -Contain 'DnsResolution'
+            @($Candidate.Controls.Type) | Should -Contain 'HttpEndpointHealth'
+            @($Candidate.Controls.Type) | Should -Contain 'ProcessRunning'
+            @($Candidate.Controls.Type) | Should -Contain 'LocalGroupMembership'
+            @($Candidate.Controls).Count | Should -Be 16
             @($Candidate.Controls | Where-Object Remediable).Count | Should -Be 0
         }
     }
 
-    It 'warns that TCP items make observable connections without running them' {
+    It 'warns that network-active items can contact services without running them' {
         $result = Test-EFBaseline -InputObject $script:EverydayBaseline -PassThru
 
         $result.IsValid | Should -BeTrue
         $result.WarningCount | Should -Be 1
-        $result.Warnings[0] | Should -Match 'TCP connection'
+        $result.Warnings[0] | Should -Match 'network-active'
+        $result.Warnings[0] | Should -Match 'WindowsUpdateAvailable'
+        $result.Warnings[0] | Should -Match 'DnsResolution'
+        $result.Warnings[0] | Should -Match 'HttpEndpointHealth'
     }
 
     It 'creates an edit-before-use everyday template' {
@@ -40,7 +56,7 @@ Describe 'Everyday checklist validation' {
         $result = New-EFBaseline -Name 'Contoso.Operations' -Template EverydayChecks -Path $path
 
         $result.Template | Should -Be 'EverydayChecks'
-        $result.ControlCount | Should -Be 4
+        $result.ControlCount | Should -Be 16
         $result.NextSteps[0] | Should -Match 'Replace every sample'
         (Test-EFBaseline -Path $path) | Should -BeTrue
     }
@@ -386,7 +402,10 @@ Describe 'TCP port checklist items' {
                 DesiredValue = $true; Remediable = $false
             }
 
-            $result = Get-EFControlState -Control $control
+            $result = Get-EFControlState -Control $control -EvaluationContext @{
+                AllowNetworkChecks = $true
+                Cache = @{}
+            }
 
             $result.Status | Should -Be 'Compliant'
             $result.ActualValue | Should -BeTrue
@@ -404,7 +423,10 @@ Describe 'TCP port checklist items' {
                 HostName = 'app.contoso.example'; Port = 443; DesiredValue = $true; Remediable = $false
             }
 
-            $result = Get-EFControlState -Control $control
+            $result = Get-EFControlState -Control $control -EvaluationContext @{
+                AllowNetworkChecks = $true
+                Cache = @{}
+            }
 
             $result.Status | Should -Be 'NonCompliant'
             $result.ActualValue | Should -BeFalse
@@ -421,7 +443,10 @@ Describe 'TCP port checklist items' {
                 HostName = 'missing.contoso.example'; Port = 443; DesiredValue = $false; Remediable = $false
             }
 
-            $result = Get-EFControlState -Control $control
+            $result = Get-EFControlState -Control $control -EvaluationContext @{
+                AllowNetworkChecks = $true
+                Cache = @{}
+            }
 
             $result.Status | Should -Be 'Error'
             $result.ActualValue | Should -BeNullOrEmpty
@@ -448,11 +473,11 @@ Describe 'TCP port checklist items' {
 }
 
 Describe 'Everyday control readiness and fleet safety' {
-    It 'describes all four checks in everyday words and offers no automatic fixes' {
+    It 'describes all sixteen checks in everyday words and offers no automatic fixes' {
         $readiness = Get-EFEndpointReadiness -Baseline $script:EverydayBaseline
 
-        $readiness.NetworkCheckCount | Should -Be 1
-        @($readiness.ControlCapabilities).Count | Should -Be 4
+        $readiness.NetworkCheckCount | Should -Be 5
+        @($readiness.ControlCapabilities).Count | Should -Be 16
         @($readiness.ControlCapabilities | Where-Object FixStatus -ne 'NotOffered').Count | Should -Be 0
         ($readiness.ControlCapabilities | Where-Object Type -eq 'TcpPort').HowChecked | Should -Match 'one time-limited TCP connection'
         ($readiness.ControlCapabilities | Where-Object Type -eq 'WindowsEvent').HowChecked | Should -Match 'Event messages.*never returned'
@@ -476,14 +501,14 @@ Describe 'Everyday control readiness and fleet safety' {
             $result = Get-EFFleetSummary -ComputerName $targetComputer -Baseline $Baseline -AllowNetworkChecks
 
             Should -Invoke Invoke-Command -Times 1 -Exactly
-            $result.NetworkCheckCount | Should -Be 1
+            $result.NetworkCheckCount | Should -Be 5
             $result.NetworkChecksAllowed | Should -BeTrue
         }
     }
 }
 
 Describe 'Everyday checks in the guided menu' {
-    It 'shows the four capabilities and makes the example template edit-before-use' {
+    It 'shows the expanded capabilities and makes the example template edit-before-use' {
         $script:EverydayMenuInputs = [Collections.Generic.Queue[string]]::new()
         foreach ($inputValue in @('6', '5', '', 'B', 'Q')) {
             $script:EverydayMenuInputs.Enqueue($inputValue)
@@ -499,14 +524,14 @@ Describe 'Everyday checks in the guided menu' {
         $text = $script:EverydayMenuLines -join "`n"
 
         $text | Should -Match 'required files'
-        $text | Should -Match 'text near the end of a log'
+        $text | Should -Match 'text near\s+the end of a log'
         $text | Should -Match 'Windows event IDs'
         $text | Should -Match 'network connection examples'
         $text | Should -Match 'fictional Contoso targets'
         $text | Should -Match 'edited before they are run'
     }
 
-    It 'shows the TCP notice again after selecting another checklist with the same name and version' {
+    It 'shows the network notice again after selecting another checklist with the same name and version' {
         $firstChecklist = $script:EverydayBaseline | ConvertTo-Json -Depth 20 | ConvertFrom-Json
         $secondChecklist = $script:EverydayBaseline | ConvertTo-Json -Depth 20 | ConvertFrom-Json
         ($firstChecklist.Controls | Where-Object Type -eq 'TcpPort').HostName = 'first.contoso.example'
@@ -517,7 +542,7 @@ Describe 'Everyday checks in the guided menu' {
         [IO.File]::WriteAllText($secondPath, ($secondChecklist | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
 
         $script:EverydayMenuInputs = [Collections.Generic.Queue[string]]::new()
-        foreach ($inputValue in @('1', '6', '2', $secondPath, 'B', '1', 'Q')) {
+        foreach ($inputValue in @('1', 'NETWORK', '6', '2', $secondPath, 'B', '1', 'NETWORK', 'Q')) {
             $script:EverydayMenuInputs.Enqueue($inputValue)
         }
         $script:EverydayMenuLines = [Collections.Generic.List[string]]::new()

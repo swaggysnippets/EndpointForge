@@ -5,10 +5,14 @@ function Get-EFComplianceReport {
 
     .DESCRIPTION
     Reads each selected item and compares it with the expected answer in a checklist.
-    Items can cover Windows settings, an exact local file, literal text near the end of a
-    log, recent Windows event IDs, or one TCP host and port. This command does not apply a
-    fix or change Windows. A TcpPort item does make one real, observable connection
-    attempt to the named destination, then closes it without sending application data.
+    Items can cover Windows settings, restart and update state, storage, applications,
+    scheduled jobs, files, certificates, events, processes, account relationships, and
+    approved network services. This command does not apply a fix or change Windows.
+
+    TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
+    LocalGroupMembership are network-active. They are blocked unless AllowNetworkChecks is
+    supplied. Contacted services, identity providers, or monitoring tools may record the
+    activity. Update scans never install updates or change update settings.
 
     File-text results do not contain matching lines, and event results do not contain
     event messages or event data. In script output, a checklist is called a baseline and
@@ -23,11 +27,15 @@ function Get-EFComplianceReport {
 
     .PARAMETER Baseline
     The checklist to use: a built-in name, a checklist JSON file, or an object returned
-    by Get-EFBaseline. Review custom paths, event queries, hosts, and ports before running
-    the checklist.
+    by Get-EFBaseline. Review every target and network-active item before running it.
 
     .PARAMETER ControlId
     One or more checklist item IDs to check. Every item is checked by default.
+
+    .PARAMETER AllowNetworkChecks
+    Allows the five network-active types after their destinations, requested account
+    identities, update options, and purposes have been reviewed. This is an explicit
+    acknowledgement, not a network authorization system.
 
     .PARAMETER NoProgress
     Suppresses the progress display for non-interactive automation hosts.
@@ -40,10 +48,9 @@ function Get-EFComplianceReport {
     $report.Results | Where-Object Status -ne 'Compliant'
 
     .EXAMPLE
-    Get-EFComplianceReport -Baseline .\Contoso.EverydayChecks.json -NoProgress
+    Get-EFComplianceReport -Baseline .\Contoso.EverydayChecks.json -AllowNetworkChecks -NoProgress
 
-    Runs the four report-only everyday checks in the custom file. If it includes TcpPort,
-    the named connection attempt can be recorded by the destination or network tools.
+    Runs the expanded report-only examples, including approved network-active items.
 
     .OUTPUTS
     EndpointForge.ComplianceReport
@@ -55,6 +62,8 @@ function Get-EFComplianceReport {
         [object]$Baseline = 'EnterpriseRecommended',
 
         [string[]]$ControlId,
+
+        [switch]$AllowNetworkChecks,
 
         [switch]$NoProgress
     )
@@ -72,11 +81,24 @@ function Get-EFComplianceReport {
         $controls = @($controls | Where-Object { $_.Id -in @($ControlId) })
     }
 
+    $networkControls = @($controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
+    if ($networkControls.Count -gt 0 -and -not $AllowNetworkChecks) {
+        $networkTypes = @($networkControls.Type | Sort-Object -Unique) -join ', '
+        throw [System.InvalidOperationException]::new(
+            "This checklist contains $($networkControls.Count) network-active item(s): $networkTypes. " +
+            'Review their destinations and purpose, then add -AllowNetworkChecks to run them.'
+        )
+    }
+
     Write-EFLog -Message "Compliance evaluation started for baseline '$($resolvedBaseline.Name)'." `
         -CorrelationId $correlationId -Data @{ controlCount = $controls.Count }
 
     $controlIndex = 0
     $baselineCommandArgument = Get-EFBaselineCommandArgument -Baseline $resolvedBaseline
+    $evaluationContext = @{
+        AllowNetworkChecks = [bool]$AllowNetworkChecks
+        Cache              = @{}
+    }
     $results = @(
         foreach ($control in $controls) {
             $controlIndex++
@@ -85,7 +107,7 @@ function Get-EFComplianceReport {
                     -Status "Checking: $($control.Title)" `
                     -PercentComplete ([math]::Round(($controlIndex / $controls.Count) * 100))
             }
-            $controlResult = Get-EFControlState -Control $control
+            $controlResult = Get-EFControlState -Control $control -EvaluationContext $evaluationContext
             if ($controlResult.Status -eq 'NonCompliant' -and $controlResult.Remediable) {
                 $controlResult.RecommendedAction = if ($null -ne $baselineCommandArgument) {
                     "Preview this supported fix before approval. For scripts: Invoke-EFEndpointRemediation $baselineCommandArgument -ControlId '$($controlResult.ControlId)' -WhatIf"
@@ -144,6 +166,8 @@ function Get-EFComplianceReport {
         ChecklistName       = [string]$resolvedBaseline.Name
         ChecklistVersion    = [string]$resolvedBaseline.Version
         ChecklistItemCount  = $controls.Count
+        NetworkCheckCount   = $networkControls.Count
+        NetworkChecksAllowed = [bool]$AllowNetworkChecks
         CorrelationId       = $correlationId
         EvaluatedAtUtc      = [DateTime]::UtcNow
         IsCompliant         = $isCompliant

@@ -83,11 +83,21 @@ function Get-EFEndpointHealth {
         })
     }
 
+    $pendingRebootErrorCount = [int](Get-EFPropertyValue -InputObject $pendingReboot -Name 'ErrorCount' -Default 0)
     $checks.Add([pscustomobject]@{
-        Id = 'PendingReboot'; Severity = if ($pendingReboot.IsRebootPending) { 'Warning' } else { 'Information' }
-        Status = if ($pendingReboot.IsRebootPending) { 'Unhealthy' } else { 'Healthy' }
-        Message = if ($pendingReboot.IsRebootPending) { "Restart pending: $($pendingReboot.Reasons -join ', ')." } else { 'No pending restart was detected.' }
-        ActualValue = $pendingReboot.IsRebootPending; Threshold = $false
+        Id = 'PendingReboot'
+        Severity = if ($pendingReboot.IsRebootPending -or $pendingRebootErrorCount -gt 0) { 'Warning' } else { 'Information' }
+        Status = if ($pendingReboot.IsRebootPending) { 'Unhealthy' } elseif ($pendingRebootErrorCount -gt 0) { 'Unknown' } else { 'Healthy' }
+        Message = if ($pendingReboot.IsRebootPending -and $pendingRebootErrorCount -gt 0) {
+            'Windows confirmed that a restart is pending, although it could not read every other restart indicator.'
+        }
+        elseif ($pendingRebootErrorCount -gt 0) {
+            'Windows could not read every pending-restart indicator, so EndpointForge did not assume that no restart is needed.'
+        }
+        elseif ($pendingReboot.IsRebootPending) { "Restart pending: $($pendingReboot.Reasons -join ', ')." }
+        else { 'No pending restart was detected.' }
+        ActualValue = if ($pendingReboot.IsRebootPending) { $true } elseif ($pendingRebootErrorCount -gt 0) { $null } else { $false }
+        Threshold = $false
     })
 
     foreach ($firewallProfile in @($inventory.Security.Firewall)) {

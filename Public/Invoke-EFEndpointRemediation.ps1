@@ -18,6 +18,11 @@ function Invoke-EFEndpointRemediation {
     .PARAMETER ControlId
     Limits the preview or fix to specific checklist item IDs.
 
+    .PARAMETER AllowNetworkChecks
+    Allows network-active report-only items to be evaluated alongside selected supported
+    fixes after their destinations and purposes have been reviewed. It does not make those
+    report-only items remediable.
+
     .PARAMETER StopOnError
     Stops after the first selected fix cannot complete. By default, remaining items continue.
 
@@ -38,6 +43,8 @@ function Invoke-EFEndpointRemediation {
 
         [string[]]$ControlId,
 
+        [switch]$AllowNetworkChecks,
+
         [switch]$StopOnError,
 
         [switch]$NoProgress
@@ -56,7 +63,15 @@ function Invoke-EFEndpointRemediation {
         $controls = @($controls | Where-Object { $_.Id -in @($ControlId) })
     }
 
+    $networkControls = @($controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
+    if ($networkControls.Count -gt 0 -and -not $AllowNetworkChecks) {
+        throw [System.InvalidOperationException]::new(
+            'The selected items include network-active checks. Review them, then add -AllowNetworkChecks to evaluate them.'
+        )
+    }
+
     $beforeResults = @{}
+    $evaluationContext = @{ AllowNetworkChecks = [bool]$AllowNetworkChecks; Cache = @{} }
     $evaluationIndex = 0
     foreach ($control in $controls) {
         $evaluationIndex++
@@ -65,7 +80,7 @@ function Invoke-EFEndpointRemediation {
                 -Status "Checking $($control.Id): $($control.Title)" `
                 -PercentComplete ([math]::Round(($evaluationIndex / $controls.Count) * 30))
         }
-        $beforeResults[[string]$control.Id] = Get-EFControlState -Control $control
+        $beforeResults[[string]$control.Id] = Get-EFControlState -Control $control -EvaluationContext $evaluationContext
     }
 
     $changeCandidates = @($controls | Where-Object {
@@ -122,7 +137,7 @@ function Invoke-EFEndpointRemediation {
                         $change = Invoke-EFControlRemediation -Control $control
                         $rebootRequired = $rebootRequired -or [bool]$change.RebootRequired
                         $afterReadAttempted = $true
-                        $after = Get-EFControlState -Control $control
+                        $after = Get-EFControlState -Control $control -EvaluationContext $evaluationContext
                         $afterReadSucceeded = $null -ne $after -and [string]$after.Status -ne 'Error'
                         if ($after.Status -eq 'Compliant') {
                             $outcome = 'Changed'
@@ -139,7 +154,7 @@ function Invoke-EFEndpointRemediation {
                         $message = $remediationError
                         $afterReadAttempted = $true
                         try {
-                            $after = Get-EFControlState -Control $control
+                            $after = Get-EFControlState -Control $control -EvaluationContext $evaluationContext
                             $afterReadSucceeded = $null -ne $after -and [string]$after.Status -ne 'Error'
                         }
                         catch {
