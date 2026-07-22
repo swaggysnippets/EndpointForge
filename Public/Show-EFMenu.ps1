@@ -1,49 +1,53 @@
 function Show-EFMenu {
     <#
     .SYNOPSIS
-    Opens the guided EndpointForge console menu.
+    Opens the beginner-friendly EndpointForge menu.
 
     .DESCRIPTION
-    Provides a keyboard-friendly interactive menu over EndpointForge's object-based
-    commands. The menu guides operators through assessment, detailed findings,
-    remediation planning, safe WhatIf previews, scoped remediation, baseline selection
-    and creation, and report export.
+    Helps a person check one or more Windows computers, understand the results, preview
+    supported fixes, save reports, compare checkups, and choose a settings checklist.
+    Every choice explains whether it reads information, writes a file, or can change a
+    Windows setting.
 
-    Assessment and planning are read-only. Applying remediation requires an elevated
-    session, selection of specific automatic controls, a fresh WhatIf preview, and an
-    exact APPLY acknowledgement. EndpointForge never restarts the device automatically.
+    A checklist is simply a list of Windows settings and their expected values. Scripts
+    call it a baseline. Selecting a checklist never applies it. A computer check and a
+    preview never change Windows.
 
-    The menu writes presentation text to the host and is silent on the success stream by
-    default. Use PassThru to receive one session object when the menu closes. For
-    unattended automation, call the underlying Get, Test, Export, and Invoke commands
-    directly instead of using this interactive command.
+    Applying a supported fix requires selecting the item, completing a fresh preview,
+    running PowerShell as Administrator, and typing APPLY exactly. EndpointForge records
+    before and after values, never restarts a computer, and does not promise automatic
+    rollback because organization policy or later Windows changes may control a setting.
+
+    The menu is for people. Scripts should use the object-based EndpointForge commands.
+    Use PassThru to receive a record of the menu session when it closes.
 
     .PARAMETER Baseline
-    The initial built-in baseline name, custom JSON path, or validated baseline object.
+    The starting checklist: a built-in name, custom JSON path, or validated checklist
+    object. The parameter keeps its Baseline name for compatibility with PowerShell
+    automation.
 
     .PARAMETER ReportDirectory
-    The directory used by the Export session report action. It is created only when an
-    export is requested. The default is EndpointForge Reports under Documents.
+    Where HTML and JSON reports are saved. The directory is created only when you save a
+    report. The default is EndpointForge Reports under Documents.
 
     .PARAMETER IncludeSoftware
-    Includes installed software in assessments started from the menu.
+    Includes installed software in computer checkups. This can take longer and makes
+    reports contain more private device information.
 
     .PARAMETER MinimumFreeSpacePercent
-    Sets the system-drive warning threshold for menu assessments.
+    The system-drive free-space level that should be described as needing attention.
 
     .PARAMETER MaximumUptimeDays
-    Sets the uptime warning threshold for menu assessments.
+    The number of days without a restart that should be described as needing attention.
 
     .PARAMETER NoColor
-    Disables menu and dashboard colors. Color is also disabled when NO_COLOR is set or
-    console output is redirected.
+    Uses plain terminal text without colors.
 
     .PARAMETER NoProgress
-    Suppresses progress displays from assessment, planning, preview, and remediation.
+    Hides progress bars while checks and previews run.
 
     .PARAMETER NoPause
-    Skips Press Enter pauses after actions. It never skips menu input, control selection,
-    or the APPLY safety acknowledgement.
+    Skips Press Enter pauses. It never skips a selection or the APPLY confirmation.
 
     .PARAMETER PassThru
     Returns one EndpointForge.MenuSession object after the menu closes.
@@ -54,9 +58,6 @@ function Show-EFMenu {
     .EXAMPLE
     Show-EFMenu -Baseline .\Contoso.Workstation.json -IncludeSoftware
 
-    .EXAMPLE
-    $session = Show-EFMenu -NoColor -NoProgress -PassThru
-
     .OUTPUTS
     None by default. EndpointForge.MenuSession when PassThru is specified.
 
@@ -64,10 +65,10 @@ function Show-EFMenu {
     Get-EFEndpointSummary
 
     .LINK
-    Get-EFRemediationPlan
+    Get-EFEndpointReadiness
 
     .LINK
-    Invoke-EFEndpointRemediation
+    Compare-EFEndpointSummary
     #>
     [CmdletBinding()]
     param(
@@ -97,13 +98,17 @@ function Show-EFMenu {
     $null = Test-EFWindows -Throw
     $startedAtUtc = [DateTime]::UtcNow
     $computerName = if ([string]::IsNullOrWhiteSpace($env:COMPUTERNAME)) { [Environment]::MachineName } else { $env:COMPUTERNAME }
+    $safeComputerName = $computerName -replace '[^A-Za-z0-9._-]', '_'
     $width = Get-EFConsoleWidth
     $effectiveNoColor = [bool]$NoColor -or -not [string]::IsNullOrEmpty($env:NO_COLOR)
-    try {
-        $effectiveNoColor = $effectiveNoColor -or [Console]::IsOutputRedirected
-    }
-    catch {
-        Write-Verbose 'Console redirection state is unavailable; using NoColor and NO_COLOR preferences.'
+    try { $effectiveNoColor = $effectiveNoColor -or [Console]::IsOutputRedirected }
+    catch { Write-Verbose 'The console redirection state is unavailable; using the requested color preference.' }
+    $skipPauses = [bool]$NoPause
+    $menuSummaryParameters = @{
+        IncludeSoftware         = [bool]$IncludeSoftware
+        MinimumFreeSpacePercent = $MinimumFreeSpacePercent
+        MaximumUptimeDays       = $MaximumUptimeDays
+        NoProgress              = [bool]$NoProgress
     }
 
     if ([string]::IsNullOrWhiteSpace($ReportDirectory)) {
@@ -117,32 +122,29 @@ function Show-EFMenu {
         $resolvedBaseline = Resolve-EFBaseline -Baseline $Baseline
     }
     catch {
-        throw [System.ArgumentException]::new("The initial baseline is invalid: $($_.Exception.Message)", $_.Exception)
+        throw [System.ArgumentException]::new("The starting checklist could not be used: $($_.Exception.Message)", $_.Exception)
     }
     $activeBaseline = $Baseline
+    $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
 
     $history = [Collections.Generic.List[object]]::new()
     $menuErrors = [Collections.Generic.List[object]]::new()
     $lastSummary = $null
+    $previousSummary = $null
+    $lastComparison = $null
     $lastPlan = $null
     $lastPreview = $null
     $lastRemediation = $null
+    $lastFleet = $null
     $lastExportPath = $null
     $actionCount = 0
     $exitReason = 'Quit'
     $isAdministrator = Test-EFAdministrator
-    $isRemoteSession = $false
-    try {
-        $senderInfo = Get-Variable -Name PSSenderInfo -ValueOnly -ErrorAction SilentlyContinue
-        $isRemoteSession = $null -ne $senderInfo
-    }
-    catch {
-        $isRemoteSession = $false
-    }
+    $isRemoteSession = [bool](Get-EFPropertyValue $readiness 'IsRemoteSession' $false)
 
     $addHistory = {
         param([string]$Action, [string]$Status, [string]$Message)
-        $null = $history.Add([pscustomobject]@{
+        $history.Add([pscustomobject]@{
             PSTypeName = 'EndpointForge.MenuHistoryEntry'
             AtUtc      = [DateTime]::UtcNow
             Action     = $Action
@@ -150,385 +152,550 @@ function Show-EFMenu {
             Message    = $Message
         })
     }
+    $getNewSummary = {
+        Get-EFEndpointSummary -Baseline $activeBaseline @menuSummaryParameters
+    }
+    $pause = {
+        if ($skipPauses) { return $true }
+        $pauseInput = Read-EFMenuInput -Prompt 'Press Enter to continue'
+        return $null -ne $pauseInput
+    }
+    $writeChecklistItems = {
+        Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text ("What the '{0}' checklist checks" -f $resolvedBaseline.Name) -Color Cyan -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'Showing a checklist only explains it. No Windows setting is changed.' -Color Green -NoColor:$effectiveNoColor -Width $width
+        $itemNumber = 0
+        foreach ($item in @($resolvedBaseline.Controls)) {
+            $itemNumber++
+            $fixText = if ([bool]$item.Remediable) { 'EndpointForge can preview a supported fix' } else { 'You need to review this item' }
+            Write-EFMenuLine -Text ("{0}. {1}" -f $itemNumber, $item.Title) -NoColor:$effectiveNoColor -Width $width -Indent 2
+            Write-EFMenuLine -Text ("Why: {0}" -f (Get-EFPropertyValue $item 'WhyItMatters' $item.Description)) -NoColor:$effectiveNoColor -Width $width -Indent 4
+            Write-EFMenuLine -Text ("Action: {0}." -f $fixText) -NoColor:$effectiveNoColor -Width $width -Indent 4
+        }
+    }
 
     $running = $true
-    :MenuLoop while ($running) {
+    :MainLoop while ($running) {
         $isAdministrator = Test-EFAdministrator
-        $lastAssessmentText = if ($null -eq $lastSummary) {
-            'Not run'
+        $latestText = if ($null -eq $lastSummary) {
+            'Not run yet - choose 1 to begin'
         }
         else {
-            "{0} at {1:u}" -f $lastSummary.OverallStatus, ([DateTime]$lastSummary.CompletedAtUtc)
+            $latestLabel = switch ([string]$lastSummary.OverallStatus) {
+                'Healthy' { 'Looks good' }
+                'Warning' { 'Needs attention' }
+                'Critical' { 'Urgent attention' }
+                default { 'Could not check everything' }
+            }
+            "$latestLabel at $(([DateTime]$lastSummary.CompletedAtUtc).ToLocalTime().ToString('g'))"
+        }
+        $readyText = switch ([string]$readiness.Status) {
+            'Ready' { 'Ready to check' }
+            'Limited' { 'Ready with limits - checks work, but some protected details or fixes may need Administrator permission' }
+            default { 'Not ready - review the readiness explanation' }
         }
 
         Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text 'EndpointForge' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text 'Enterprise Windows endpoint automation' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'EndpointForge - Windows computer helper' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'Checks health and security, explains problems, and safely previews supported fixes.' -NoColor:$effectiveNoColor -Width $width
         Write-EFMenuLine -Text ('=' * [math]::Min(72, $width)) -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text ("Target: {0} ({1})" -f $computerName, $(if ($isRemoteSession) { 'remote session' } else { 'local endpoint' })) `
-            -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text ("Access: {0}" -f $(if ($isAdministrator) { 'Administrator' } else { 'Standard user - assessment and preview available' })) `
-            -Color $(if ($isAdministrator) { [ConsoleColor]::Green } else { [ConsoleColor]::Yellow }) `
-            -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text ("Baseline: {0} {1}" -f $resolvedBaseline.Name, $resolvedBaseline.Version) -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text ("Last assessment: {0}" -f $lastAssessmentText) -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'THIS SESSION' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text ("Computer: {0}{1}" -f $computerName, $(if ($isRemoteSession) { ' (connected remotely)' } else { '' })) -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text ("Permission: {0}" -f $(if ($isAdministrator) { 'Administrator - checks, previews, and approved supported fixes are available' } else { 'Check and preview only - Administrator permission is needed to apply fixes' })) `
+            -Color $(if ($isAdministrator) { [ConsoleColor]::Green } else { [ConsoleColor]::Yellow }) -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text ("Checklist: {0} {1} - {2} Windows settings to check" -f $resolvedBaseline.Name, $resolvedBaseline.Version, @($resolvedBaseline.Controls).Count) -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text ("Ready: {0}" -f $readyText) -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text ("Latest check: {0}" -f $latestText) -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'A checklist is simply a list of settings EndpointForge compares with this computer. Choosing one never changes Windows.' -NoColor:$effectiveNoColor -Width $width
         if ($isRemoteSession) {
-            Write-EFMenuLine -Text '[REMOTE] Actions affect the endpoint named above, not your local workstation.' `
-                -Color Yellow -NoColor:$effectiveNoColor -Width $width
+            Write-EFMenuLine -Text '[IMPORTANT] Checks and approved fixes affect the remote computer named above.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
         }
 
         Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '1. Run or refresh assessment                 [read only]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '2. Review detailed findings                  [read only]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '3. Build remediation plan                    [read only]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '4. Preview selected automatic fixes          [no changes]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '5. Apply selected automatic fixes            [changes endpoint]' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '6. Export current session report             [writes JSON]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '7. Select a different baseline               [clears cached results]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text '8. Create a new baseline                     [writes JSON + schema]' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text 'H. Help and safety guide' -NoColor:$effectiveNoColor -Width $width
-        Write-EFMenuLine -Text 'Q. Quit' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '1. Check this computer now              [does not change Windows]' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '2. Understand the latest results        [does not change Windows]' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '3. Fix selected problems safely         [can change settings after approval]' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '4. Save reports or compare checks       [creates files only when you choose Save]' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '5. Check other computers                [read-only; advanced setup required]' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text '6. Change what EndpointForge checks     [does not change Windows]' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'A. Tools for IT scripts and troubleshooting' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'H. Help - explain every choice' -NoColor:$effectiveNoColor -Width $width
+        Write-EFMenuLine -Text 'Q. Exit EndpointForge' -NoColor:$effectiveNoColor -Width $width
 
         $choice = Read-EFMenuInput -Prompt 'Choose an option'
-        if ($null -eq $choice) {
-            $exitReason = 'InputClosed'
-            break MenuLoop
-        }
+        if ($null -eq $choice) { $exitReason = 'InputClosed'; break MainLoop }
         $normalizedChoice = $choice.Trim().ToUpperInvariant()
-        $shouldPause = $true
         $currentAction = $normalizedChoice
 
         try {
             switch -Regex ($normalizedChoice) {
-                '^(1|A|ASSESS|ASSESSMENT|REFRESH)$' {
-                    $currentAction = 'Assessment'
+                '^(1|CHECK|START)$' {
+                    $currentAction = 'Check this computer'
                     $actionCount++
-                    Write-EFMenuLine -Text 'Collecting endpoint evidence...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    $summaryParameters = @{
-                        Baseline                = $activeBaseline
-                        IncludeSoftware         = [bool]$IncludeSoftware
-                        MinimumFreeSpacePercent = $MinimumFreeSpacePercent
-                        MaximumUptimeDays       = $MaximumUptimeDays
-                        NoProgress              = [bool]$NoProgress
+                    Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'Checking this computer' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'This check only reads information. It does not change Windows.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                    if (-not $readiness.AssessmentReady) {
+                        Write-EFMenuReadiness -Readiness $readiness -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Computer check' 'Blocked' $readiness.Summary
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                        break
                     }
-                    $lastSummary = Get-EFEndpointSummary @summaryParameters
+                    if ($null -ne $lastSummary) { $previousSummary = $lastSummary }
+                    $lastSummary = & $getNewSummary
+                    $lastPlan = $null
+                    $lastPreview = $null
+                    if ($null -ne $previousSummary) {
+                        try { $lastComparison = Compare-EFEndpointSummary -Before $previousSummary -After $lastSummary } catch { $lastComparison = $null }
+                    }
                     $null = Show-EFEndpointSummary -InputObject $lastSummary -NoColor:$effectiveNoColor
-                    & $addHistory 'Assessment' 'Completed' $lastSummary.OverallStatus
+                    & $addHistory 'Computer check' 'Completed' $lastSummary.OverallStatus
+                    if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
                     break
                 }
-                '^(2|D|DETAIL|DETAILS|FINDINGS)$' {
-                    $currentAction = 'Detailed findings'
-                    $actionCount++
-                    if ($null -eq $lastSummary) {
-                        Write-EFMenuLine -Text 'No cached assessment exists; collecting one now...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                        $summaryParameters = @{
-                            Baseline                = $activeBaseline
-                            IncludeSoftware         = [bool]$IncludeSoftware
-                            MinimumFreeSpacePercent = $MinimumFreeSpacePercent
-                            MaximumUptimeDays       = $MaximumUptimeDays
-                            NoProgress              = [bool]$NoProgress
+
+                '^(2|RESULT|RESULTS|UNDERSTAND)$' {
+                    :ResultsLoop while ($running) {
+                        Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Understand the latest results' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Every choice here only reads information.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '1. Show a simple overview' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '2. Explain every item' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '3. Show what changed since the previous check' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '4. Show computer and protection details' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'B. Back to the main menu' -NoColor:$effectiveNoColor -Width $width
+                        $resultChoice = Read-EFMenuInput -Prompt 'Choose a result view'
+                        if ($null -eq $resultChoice) { $exitReason = 'InputClosed'; $running = $false; break ResultsLoop }
+                        switch ($resultChoice.Trim().ToUpperInvariant()) {
+                            { $_ -in @('1', '2', '4') } {
+                                $actionCount++
+                                if ($null -eq $lastSummary) {
+                                    Write-EFMenuLine -Text 'No check exists yet, so EndpointForge will run a read-only check now.' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                                    $lastSummary = & $getNewSummary
+                                }
+                                if ($_ -eq '1') {
+                                    $null = Show-EFEndpointSummary -InputObject $lastSummary -NoColor:$effectiveNoColor
+                                    & $addHistory 'Simple results' 'Viewed' $lastSummary.OverallStatus
+                                }
+                                elseif ($_ -eq '2') {
+                                    $null = Show-EFEndpointSummary -InputObject $lastSummary -Detailed -NoColor:$effectiveNoColor
+                                    & $addHistory 'Detailed results' 'Viewed' "$($lastSummary.IssueCount) item(s) need attention"
+                                }
+                                else {
+                                    Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text 'Computer and protection details' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text ("Computer: {0}" -f $lastSummary.ComputerName) -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text ("Windows: {0}, build {1}" -f $lastSummary.OperatingSystem, $lastSummary.OperatingSystemBuild) -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text ("Model: {0}; running for {1} day(s); system drive free {2}%" -f $lastSummary.Model, $lastSummary.UptimeDays, $lastSummary.DiskFreePercent) -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text ("Firewall: {0}; Defender: {1}; BitLocker: {2}" -f $lastSummary.Security.Firewall, $lastSummary.Security.Defender, $lastSummary.Security.BitLocker) -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text ("Secure Boot: {0}; TPM: {1}; restart waiting: {2}" -f $lastSummary.Security.SecureBoot, $lastSummary.Security.Tpm, $(if ($lastSummary.IsRebootPending) { 'Yes' } else { 'No' })) -NoColor:$effectiveNoColor -Width $width
+                                    & $addHistory 'Computer details' 'Viewed' $lastSummary.ComputerName
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ResultsLoop }
+                            }
+                            '3' {
+                                $actionCount++
+                                if ($null -eq $lastSummary -or $null -eq $previousSummary) {
+                                    Write-EFMenuLine -Text '[NOT READY] Two checks from this computer are needed. Choose 1 on the main menu twice, or load an earlier JSON report under Save reports or compare checks.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                else {
+                                    $lastComparison = Compare-EFEndpointSummary -Before $previousSummary -After $lastSummary
+                                    Write-EFMenuComparison -Comparison $lastComparison -NoColor:$effectiveNoColor -Width $width
+                                    & $addHistory 'Compare checks' 'Completed' $lastComparison.Summary
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ResultsLoop }
+                            }
+                            { $_ -in @('B', 'BACK', 'Q') } { break ResultsLoop }
+                            default { Write-EFMenuLine -Text '[INVALID] Choose 1-4 or B.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
                         }
-                        $lastSummary = Get-EFEndpointSummary @summaryParameters
                     }
-                    $null = Show-EFEndpointSummary -InputObject $lastSummary -Detailed -NoColor:$effectiveNoColor
-                    & $addHistory 'Detailed findings' 'Completed' "$($lastSummary.IssueCount) issue(s), $($lastSummary.UnknownCount) unknown"
+                    if (-not $running) { break MainLoop }
                     break
                 }
-                '^(3|P|PLAN)$' {
-                    $currentAction = 'Remediation plan'
+
+                '^(3|FIX|REPAIR)$' {
+                    $currentAction = 'Safe fix assistant'
                     $actionCount++
-                    Write-EFMenuLine -Text 'Evaluating the active baseline...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    $lastPlan = Get-EFRemediationPlan -Baseline $activeBaseline -NoProgress:$NoProgress
-                    Write-EFMenuPlan -Plan $lastPlan -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Remediation plan' 'Completed' $lastPlan.Summary
-                    break
-                }
-                '^(4|V|PREVIEW)$' {
-                    $currentAction = 'Remediation preview'
-                    $actionCount++
-                    $lastPlan = Get-EFRemediationPlan -Baseline $activeBaseline -NoProgress:$NoProgress
-                    Write-EFMenuPlan -Plan $lastPlan -NoColor:$effectiveNoColor -Width $width
-                    if ([int]$lastPlan.AutomaticCount -eq 0) {
-                        Write-EFMenuLine -Text '[OK] There are no automatic changes to preview.' -Color Green -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Remediation preview' 'NotRequired' 'No automatic changes were available.'
-                        break
+                    Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'Safe fix assistant' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'First EndpointForge explains the options, then you select items, then it runs a preview that cannot change Windows.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                    if ($null -eq $lastSummary) {
+                        Write-EFMenuLine -Text 'A read-only check is needed first. Running it now...' -NoColor:$effectiveNoColor -Width $width
+                        $lastSummary = & $getNewSummary
                     }
-                    $selectedControlIds = @(Select-EFMenuControlId -Steps $lastPlan.Steps -NoColor:$effectiveNoColor -Width $width)
-                    if ($selectedControlIds.Count -eq 0) {
-                        Write-EFMenuLine -Text '[CANCELLED] No controls were selected.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Remediation preview' 'Cancelled' 'No controls were selected.'
-                        break
-                    }
-                    $previewParameters = @{
-                        Baseline   = $activeBaseline
-                        ControlId  = $selectedControlIds
-                        NoProgress = [bool]$NoProgress
-                        WhatIf     = $true
-                        Confirm    = $false
-                    }
-                    $lastPreview = Invoke-EFEndpointRemediation @previewParameters
-                    Write-EFMenuRemediationReport -Report $lastPreview -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Remediation preview' 'Completed' "$($selectedControlIds.Count) control(s) previewed."
-                    break
-                }
-                '^(5|F|FIX|APPLY)$' {
-                    $currentAction = 'Apply remediation'
-                    $actionCount++
+                    $beforeFixSummary = $lastSummary
                     $lastPlan = Get-EFRemediationPlan -Baseline $activeBaseline -NoProgress:$NoProgress
                     Write-EFMenuPlan -Plan $lastPlan -NoColor:$effectiveNoColor -Width $width
                     if ([int]$lastPlan.AutomaticCount -eq 0) {
-                        Write-EFMenuLine -Text '[OK] There are no automatic changes to apply.' -Color Green -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Apply remediation' 'NotRequired' 'No automatic changes were available.'
-                        break
-                    }
-                    if (-not (Test-EFAdministrator)) {
-                        Write-EFMenuLine -Text '[BLOCKED] Applying changes requires an elevated PowerShell session. Assessment, planning, and WhatIf preview remain available.' `
-                            -Color Red -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Apply remediation' 'Blocked' 'Administrator access is required.'
-                        break
-                    }
-                    $selectedControlIds = @(Select-EFMenuControlId -Steps $lastPlan.Steps -NoColor:$effectiveNoColor -Width $width)
-                    if ($selectedControlIds.Count -eq 0) {
-                        Write-EFMenuLine -Text '[CANCELLED] No controls were selected.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Apply remediation' 'Cancelled' 'No controls were selected.'
+                        Write-EFMenuLine -Text '[NO SUPPORTED FIXES] Review the manual guidance above. EndpointForge will not change those items.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Safe fix assistant' 'NotRequired' $lastPlan.Summary
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
                         break
                     }
 
-                    Write-EFMenuLine -Text 'Running the required WhatIf preview first...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    $previewParameters = @{
-                        Baseline   = $activeBaseline
-                        ControlId  = $selectedControlIds
-                        NoProgress = [bool]$NoProgress
-                        WhatIf     = $true
-                        Confirm    = $false
+                    $selectedControlIds = @(Select-EFMenuControlId -Steps $lastPlan.Steps -NoColor:$effectiveNoColor -Width $width)
+                    if ($selectedControlIds.Count -eq 0) {
+                        Write-EFMenuLine -Text '[CANCELLED] No items were selected. Windows was not changed.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Safe fix assistant' 'Cancelled' 'No checklist items were selected.'
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                        break
                     }
-                    $lastPreview = Invoke-EFEndpointRemediation @previewParameters
+
+                    Write-EFMenuLine -Text 'Running the required preview now. A preview cannot change Windows...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                    $lastPreview = Invoke-EFEndpointRemediation -Baseline $activeBaseline -ControlId $selectedControlIds `
+                        -NoProgress:$NoProgress -WhatIf -Confirm:$false
                     Write-EFMenuRemediationReport -Report $lastPreview -NoColor:$effectiveNoColor -Width $width
                     if ([int]$lastPreview.FailureCount -gt 0) {
-                        Write-EFMenuLine -Text '[BLOCKED] The preview reported failures. Resolve them before applying changes.' `
-                            -Color Red -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Apply remediation' 'Blocked' 'The required preview reported failures.'
+                        Write-EFMenuLine -Text '[STOPPED] The preview could not confirm every selected item. Nothing will be applied.' -Color Red -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Safe fix assistant' 'Blocked' 'The required preview was incomplete.'
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                        break
+                    }
+                    if ([int]$lastPreview.PreviewCount -eq 0) {
+                        Write-EFMenuLine -Text '[NO CHANGE NEEDED] The selected items no longer require a supported change.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Safe fix assistant' 'NotRequired' 'No selected setting still needed a change.'
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                        break
+                    }
+                    if (-not (Test-EFAdministrator)) {
+                        Write-EFMenuLine -Text '[PREVIEW COMPLETE] This PowerShell window can preview but cannot apply fixes.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'To continue later, close this window, open PowerShell with Run as administrator, start EndpointForge, and select the same items. A new preview will run before approval.' -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Safe fix assistant' 'PreviewOnly' 'Administrator permission is required to apply.'
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
                         break
                     }
 
                     $selectedSteps = @($lastPlan.Steps | Where-Object { $_.ControlId -in $selectedControlIds })
-                    $selectedRebootCount = @($selectedSteps | Where-Object RequiresReboot).Count
                     Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'CHANGE CONFIRMATION' -Color Red -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text ("Target: {0}" -f $computerName) -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text ("Baseline: {0} {1}" -f $resolvedBaseline.Name, $resolvedBaseline.Version) -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text ("Selected automatic controls: {0}" -f ($selectedControlIds -join ', ')) -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text ("Restart-impacting controls: {0}. EndpointForge will not restart the device." -f $selectedRebootCount) `
-                        -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                    $acknowledgement = Read-EFMenuInput -Prompt 'Type APPLY to make these changes; anything else cancels'
+                    Write-EFMenuLine -Text 'FINAL APPROVAL' -Color Red -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text ("Computer that would change: {0}" -f $computerName) -NoColor:$effectiveNoColor -Width $width
+                    foreach ($step in $selectedSteps) {
+                        Write-EFMenuLine -Text ("- {0}: found {1}; expected {2}{3}" -f $step.Title,
+                            (ConvertTo-EFMenuValue $step.CurrentValue), (ConvertTo-EFMenuValue $step.DesiredValue),
+                            $(if ($step.RequiresReboot) { '; restart may be needed' } else { '' })) -NoColor:$effectiveNoColor -Width $width -Indent 2
+                    }
+                    Write-EFMenuLine -Text 'EndpointForge will save before-and-after values in this session. It will not restart Windows and cannot promise automatic rollback.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                    $acknowledgement = Read-EFMenuInput -Prompt 'Type APPLY exactly to make these selected changes; anything else cancels'
                     if ($null -eq $acknowledgement -or $acknowledgement.Trim() -cne 'APPLY') {
-                        Write-EFMenuLine -Text '[CANCELLED] Endpoint state was not changed.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Apply remediation' 'Cancelled' 'The APPLY acknowledgement was not entered.'
+                        Write-EFMenuLine -Text '[CANCELLED] Windows was not changed.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Safe fix assistant' 'Cancelled' 'The APPLY approval was not entered.'
+                        if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
                         break
                     }
 
-                    $applyParameters = @{
-                        Baseline   = $activeBaseline
-                        ControlId  = $selectedControlIds
-                        NoProgress = [bool]$NoProgress
-                        Confirm    = $false
-                    }
-                    $lastRemediation = Invoke-EFEndpointRemediation @applyParameters
+                    $lastRemediation = Invoke-EFEndpointRemediation -Baseline $activeBaseline -ControlId $selectedControlIds `
+                        -NoProgress:$NoProgress -Confirm:$false
                     Write-EFMenuRemediationReport -Report $lastRemediation -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Apply remediation' 'Completed' $lastRemediation.Summary
+                    Write-EFMenuLine -Text 'Running a fresh read-only check to verify the result...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                    $previousSummary = $beforeFixSummary
+                    $lastSummary = & $getNewSummary
+                    $lastComparison = Compare-EFEndpointSummary -Before $previousSummary -After $lastSummary
+                    Write-EFMenuComparison -Comparison $lastComparison -NoColor:$effectiveNoColor -Width $width
+                    $lastPlan = $null
+                    & $addHistory 'Safe fix assistant' 'Completed' $lastRemediation.Summary
+                    if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
+                    break
+                }
 
-                    Write-EFMenuLine -Text 'Verifying endpoint state with a fresh assessment...' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    $summaryParameters = @{
-                        Baseline                = $activeBaseline
-                        IncludeSoftware         = [bool]$IncludeSoftware
-                        MinimumFreeSpacePercent = $MinimumFreeSpacePercent
-                        MaximumUptimeDays       = $MaximumUptimeDays
-                        NoProgress              = [bool]$NoProgress
+                '^(4|REPORT|REPORTS|COMPARE|SAVE)$' {
+                    :ReportLoop while ($running) {
+                        Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Save reports or compare checks' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Reports may contain private computer names, device details, and security findings. Store them in an approved location.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '1. Save an easy-to-read HTML report     [recommended for people]' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '2. Save a JSON report                   [for scripts and support tools]' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '3. Compare the latest check with an earlier JSON report' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '4. View the changes or preview from this session' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'B. Back to the main menu' -NoColor:$effectiveNoColor -Width $width
+                        $reportChoice = Read-EFMenuInput -Prompt 'Choose a report action'
+                        if ($null -eq $reportChoice) { $exitReason = 'InputClosed'; $running = $false; break ReportLoop }
+                        $normalizedReportChoice = $reportChoice.Trim().ToUpperInvariant()
+                        if ($normalizedReportChoice -in @('B', 'BACK', 'Q')) { break ReportLoop }
+
+                        switch ($normalizedReportChoice) {
+                            { $_ -in @('1', '2') } {
+                                $actionCount++
+                                if ($null -eq $lastSummary) {
+                                    Write-EFMenuLine -Text '[NOT READY] Run a computer check first so the report has useful results.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                else {
+                                    $reportBundle = New-EFMenuReport -ComputerName $computerName -Checklist $resolvedBaseline `
+                                        -Readiness $readiness -Summary $lastSummary -PreviousSummary $previousSummary `
+                                        -Comparison $lastComparison -Plan $lastPlan -Preview $lastPreview `
+                                        -Remediation $lastRemediation -Fleet $lastFleet -History @($history)
+                                    $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
+                                    $format = if ($_ -eq '1') { 'Html' } else { 'Json' }
+                                    $extension = if ($format -eq 'Html') { 'html' } else { 'json' }
+                                    $exportPath = Join-Path $resolvedReportDirectory "EndpointForge-$safeComputerName-$timestamp.$extension"
+                                    $createdFile = $reportBundle | Export-EFEndpointReport -Path $exportPath -Format $format -PassThru
+                                    $lastExportPath = $createdFile.FullName
+                                    Write-EFMenuLine -Text ("[SAVED] {0}" -f $lastExportPath) -Color Green -NoColor:$effectiveNoColor -Width $width
+                                    & $addHistory "Save $format report" 'Completed' $lastExportPath
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ReportLoop }
+                            }
+                            '3' {
+                                $actionCount++
+                                if ($null -eq $lastSummary) {
+                                    Write-EFMenuLine -Text '[NOT READY] Run a computer check first.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                else {
+                                    $earlierPath = Read-EFMenuInput -Prompt 'Path to the earlier EndpointForge JSON report; press Enter to cancel'
+                                    if (-not [string]::IsNullOrWhiteSpace($earlierPath)) {
+                                        $lastComparison = Compare-EFEndpointSummary -Before $earlierPath.Trim() -After $lastSummary
+                                        Write-EFMenuComparison -Comparison $lastComparison -NoColor:$effectiveNoColor -Width $width
+                                        & $addHistory 'Compare saved check' 'Completed' $lastComparison.Summary
+                                    }
+                                    else { Write-EFMenuLine -Text '[CANCELLED] No report was loaded.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ReportLoop }
+                            }
+                            '4' {
+                                $actionCount++
+                                if ($null -ne $lastRemediation) {
+                                    Write-EFMenuRemediationReport -Report $lastRemediation -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text 'This receipt includes before and after values plus recovery guidance. It is not an automatic rollback guarantee.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                elseif ($null -ne $lastPreview) {
+                                    Write-EFMenuRemediationReport -Report $lastPreview -NoColor:$effectiveNoColor -Width $width
+                                }
+                                else {
+                                    Write-EFMenuLine -Text '[NOT READY] No preview or approved change has happened in this session.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ReportLoop }
+                            }
+                            default { Write-EFMenuLine -Text '[INVALID] Choose 1-4 or B.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                        }
                     }
-                    $lastSummary = Get-EFEndpointSummary @summaryParameters
-                    $lastPlan = $null
-                    $null = Show-EFEndpointSummary -InputObject $lastSummary -NoColor:$effectiveNoColor
+                    if (-not $running) { break MainLoop }
                     break
                 }
-                '^(6|E|EXPORT)$' {
-                    $currentAction = 'Export session report'
-                    $actionCount++
-                    if ($null -eq $lastSummary -and $null -eq $lastPlan -and $null -eq $lastPreview -and $null -eq $lastRemediation) {
-                        Write-EFMenuLine -Text '[NOT READY] Run an assessment, plan, or preview before exporting.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Export session report' 'NotReady' 'There were no cached results to export.'
-                        break
-                    }
-                    $reportBundle = [pscustomobject][ordered]@{
-                        PSTypeName       = 'EndpointForge.MenuReport'
-                        SchemaVersion    = '1.0'
-                        ExportedAtUtc    = [DateTime]::UtcNow
-                        ComputerName     = $computerName
-                        BaselineName     = [string]$resolvedBaseline.Name
-                        BaselineVersion  = [string]$resolvedBaseline.Version
-                        Summary          = $lastSummary
-                        Plan             = $lastPlan
-                        Preview          = $lastPreview
-                        Remediation      = $lastRemediation
-                        SessionHistory   = @($history)
-                    }
-                    $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
-                    $fileName = "EndpointForge-$computerName-$timestamp.json"
-                    $exportPath = Join-Path $resolvedReportDirectory $fileName
-                    $createdFile = $reportBundle | Export-EFEndpointReport -Path $exportPath -PassThru
-                    $lastExportPath = $createdFile.FullName
-                    Write-EFMenuLine -Text ("[EXPORTED] {0}" -f $lastExportPath) -Color Green -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Export session report' 'Completed' $lastExportPath
-                    break
-                }
-                '^(7|B|BASELINE|SELECT)$' {
-                    $currentAction = 'Select baseline'
+
+                '^(5|FLEET|OTHER|REMOTE)$' {
+                    $currentAction = 'Check other computers'
                     $actionCount++
                     Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'Available built-in baselines' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    foreach ($availableBaseline in @(Get-EFBaseline -ListAvailable)) {
-                        Write-EFMenuLine -Text ("- {0} {1}: {2}" -f $availableBaseline.Name, $availableBaseline.Version, $availableBaseline.Description) `
-                            -NoColor:$effectiveNoColor -Width $width -Indent 2
+                    Write-EFMenuLine -Text 'Check other computers - read only' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'EndpointForge will only read information. It will not install itself, turn on remote access, change settings, or run fixes on those computers.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                    Write-EFMenuLine -Text 'Before this works, each computer must already allow PowerShell remoting, already have EndpointForge 0.4.0 or later installed, and allow your signed-in account to connect.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                    $targetInput = Read-EFMenuInput -Prompt 'Computer names separated by commas; enter B to cancel'
+                    if ($null -eq $targetInput -or $targetInput.Trim() -match '^(?i:B|BACK|Q)$') {
+                        Write-EFMenuLine -Text '[CANCELLED] No other computer was contacted.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
                     }
-                    $baselineSelection = Read-EFMenuInput -Prompt 'Enter a built-in name or custom JSON path; press Enter to cancel'
-                    if ($null -eq $baselineSelection -or [string]::IsNullOrWhiteSpace($baselineSelection)) {
-                        Write-EFMenuLine -Text '[CANCELLED] The active baseline was not changed.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Select baseline' 'Cancelled' 'No baseline was entered.'
-                        break
+                    else {
+                        $targetNames = @($targetInput -split '[,;\s]+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                        if ($targetNames.Count -eq 0) { throw [System.ArgumentException]::new('Enter at least one computer name.') }
+                        $lastFleet = Get-EFFleetSummary -ComputerName $targetNames -Baseline $activeBaseline -IncludeSoftware:$IncludeSoftware
+                        Write-EFMenuFleetSummary -Fleet $lastFleet -NoColor:$effectiveNoColor -Width $width
+                        & $addHistory 'Check other computers' 'Completed' $lastFleet.Summary
                     }
-                    $candidateBaseline = Resolve-EFBaseline -Baseline $baselineSelection.Trim()
-                    $activeBaseline = $baselineSelection.Trim()
-                    $resolvedBaseline = $candidateBaseline
-                    $lastSummary = $null
-                    $lastPlan = $null
-                    $lastPreview = $null
-                    $lastRemediation = $null
-                    Write-EFMenuLine -Text ("[SELECTED] {0} {1}. Cached assessment and remediation results were cleared." -f `
-                        $resolvedBaseline.Name, $resolvedBaseline.Version) -Color Green -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Select baseline' 'Completed' "$($resolvedBaseline.Name) $($resolvedBaseline.Version)"
+                    if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
                     break
                 }
-                '^(8|N|NEW|CREATE)$' {
-                    $currentAction = 'Create baseline'
-                    $actionCount++
-                    Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'Create a baseline' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    $newName = Read-EFMenuInput -Prompt 'Baseline name (for example Contoso.Workstation); press Enter to cancel'
-                    if ($null -eq $newName -or [string]::IsNullOrWhiteSpace($newName)) {
-                        Write-EFMenuLine -Text '[CANCELLED] No baseline was created.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                        & $addHistory 'Create baseline' 'Cancelled' 'No name was entered.'
-                        break
+
+                '^(6|CHECKLIST|SETTINGS)$' {
+                    :ChecklistLoop while ($running) {
+                        Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Change what EndpointForge checks' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'A checklist only describes expected settings. Selecting, viewing, validating, or creating one does not change Windows.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text ("Current checklist: {0} {1}" -f $resolvedBaseline.Name, $resolvedBaseline.Version) -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '1. Use the built-in recommended checklist' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '2. Load my organization''s checklist JSON file' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '3. Explain every item in the current checklist' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '4. Check whether a checklist file is valid' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '5. Create a starter checklist for an IT administrator' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'B. Back to the main menu' -NoColor:$effectiveNoColor -Width $width
+                        $checklistChoice = Read-EFMenuInput -Prompt 'Choose a checklist action'
+                        if ($null -eq $checklistChoice) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                        switch ($checklistChoice.Trim().ToUpperInvariant()) {
+                            '1' {
+                                $actionCount++
+                                $activeBaseline = 'EnterpriseRecommended'
+                                $resolvedBaseline = Resolve-EFBaseline -Baseline $activeBaseline
+                                $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+                                $lastSummary = $null; $previousSummary = $null; $lastComparison = $null
+                                $lastPlan = $null; $lastPreview = $null; $lastRemediation = $null; $lastFleet = $null
+                                Write-EFMenuLine -Text '[SELECTED] The built-in recommended checklist is active. Earlier results were cleared so they cannot be confused with this checklist.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                                & $addHistory 'Select checklist' 'Completed' "$($resolvedBaseline.Name) $($resolvedBaseline.Version)"
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                            }
+                            '2' {
+                                $actionCount++
+                                $checklistPath = Read-EFMenuInput -Prompt 'Path to the checklist JSON file; press Enter to cancel'
+                                if ([string]::IsNullOrWhiteSpace($checklistPath)) {
+                                    Write-EFMenuLine -Text '[CANCELLED] The checklist was not changed.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                else {
+                                    $candidate = Resolve-EFBaseline -Baseline $checklistPath.Trim()
+                                    $activeBaseline = $checklistPath.Trim()
+                                    $resolvedBaseline = $candidate
+                                    $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+                                    $lastSummary = $null; $previousSummary = $null; $lastComparison = $null
+                                    $lastPlan = $null; $lastPreview = $null; $lastRemediation = $null; $lastFleet = $null
+                                    Write-EFMenuLine -Text ("[SELECTED] {0} {1}. Earlier results were cleared." -f $resolvedBaseline.Name, $resolvedBaseline.Version) -Color Green -NoColor:$effectiveNoColor -Width $width
+                                    & $addHistory 'Select checklist' 'Completed' "$($resolvedBaseline.Name) $($resolvedBaseline.Version)"
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                            }
+                            '3' {
+                                $actionCount++
+                                & $writeChecklistItems
+                                & $addHistory 'Explain checklist' 'Viewed' "$(@($resolvedBaseline.Controls).Count) item(s)"
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                            }
+                            '4' {
+                                $actionCount++
+                                $validationPath = Read-EFMenuInput -Prompt 'Path to the checklist JSON file; press Enter to cancel'
+                                if (-not [string]::IsNullOrWhiteSpace($validationPath)) {
+                                    $validation = Test-EFBaseline -Path $validationPath.Trim() -PassThru
+                                    if ($validation.IsValid) {
+                                        Write-EFMenuLine -Text ("[VALID] {0} {1} contains {2} checklist item(s). Valid means the file is safe to read; it does not apply settings." -f $validation.Name, $validation.Version, $validation.ControlCount) -Color Green -NoColor:$effectiveNoColor -Width $width
+                                    }
+                                    else {
+                                        Write-EFMenuLine -Text '[NOT VALID] The file cannot be used:' -Color Red -NoColor:$effectiveNoColor -Width $width
+                                        foreach ($validationError in @($validation.Errors)) { Write-EFMenuLine -Text ("- {0}" -f $validationError) -NoColor:$effectiveNoColor -Width $width -Indent 2 }
+                                    }
+                                    & $addHistory 'Validate checklist' $(if ($validation.IsValid) { 'Completed' } else { 'Failed' }) $validation.Input
+                                }
+                                else { Write-EFMenuLine -Text '[CANCELLED] No file was checked.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                            }
+                            '5' {
+                                $actionCount++
+                                Write-EFMenuLine -Text 'This creates editable JSON and schema files. It does not apply settings. An IT administrator must review the checklist before use.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                $newName = Read-EFMenuInput -Prompt 'Checklist name, for example Contoso.Workstation; press Enter to cancel'
+                                if (-not [string]::IsNullOrWhiteSpace($newName)) {
+                                    $defaultPath = Join-Path (Join-Path $resolvedReportDirectory 'Checklists') ("{0}.json" -f $newName.Trim())
+                                    $newPath = Read-EFMenuInput -Prompt "Output path [$defaultPath]"
+                                    if ([string]::IsNullOrWhiteSpace($newPath)) { $newPath = $defaultPath }
+                                    $created = New-EFBaseline -Name $newName.Trim() -Template Starter -Path $newPath.Trim() `
+                                        -Description "Starter Windows settings checklist for $($newName.Trim()). Review before use."
+                                    Write-EFMenuLine -Text ("[CREATED] {0}" -f $created.Path) -Color Green -NoColor:$effectiveNoColor -Width $width
+                                    Write-EFMenuLine -Text 'The file was not selected or applied. Review it, validate it, then load it with option 2.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                    & $addHistory 'Create checklist' 'Completed' $created.Path
+                                }
+                                else { Write-EFMenuLine -Text '[CANCELLED] No file was created.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ChecklistLoop }
+                            }
+                            { $_ -in @('B', 'BACK', 'Q') } { break ChecklistLoop }
+                            default { Write-EFMenuLine -Text '[INVALID] Choose 1-5 or B.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                        }
                     }
-                    $newDescription = Read-EFMenuInput -Prompt 'Description (optional)'
-                    $newVersion = Read-EFMenuInput -Prompt 'Version [1.0.0]'
-                    if ([string]::IsNullOrWhiteSpace($newVersion)) { $newVersion = '1.0.0' }
-                    Write-EFMenuLine -Text 'Template: 1 Starter, 2 EnterpriseRecommended, 3 AuditOnly' -NoColor:$effectiveNoColor -Width $width
-                    $templateChoice = Read-EFMenuInput -Prompt 'Template [1]'
-                    $newTemplate = switch (([string]$templateChoice).Trim().ToUpperInvariant()) {
-                        '' { 'Starter' }
-                        '1' { 'Starter' }
-                        'STARTER' { 'Starter' }
-                        '2' { 'EnterpriseRecommended' }
-                        'ENTERPRISERECOMMENDED' { 'EnterpriseRecommended' }
-                        '3' { 'AuditOnly' }
-                        'AUDITONLY' { 'AuditOnly' }
-                        default { throw [System.ArgumentException]::new("Unknown template '$templateChoice'. Choose 1, 2, or 3.") }
-                    }
-                    $defaultBaselinePath = Join-Path (Join-Path $resolvedReportDirectory 'Baselines') ("{0}.json" -f $newName.Trim())
-                    $newPath = Read-EFMenuInput -Prompt "Output path [$defaultBaselinePath]"
-                    if ([string]::IsNullOrWhiteSpace($newPath)) { $newPath = $defaultBaselinePath }
-                    $newBaselineParameters = @{
-                        Name        = $newName.Trim()
-                        Version     = $newVersion.Trim()
-                        Template    = $newTemplate
-                        Path        = $newPath.Trim()
-                    }
-                    if (-not [string]::IsNullOrWhiteSpace($newDescription)) {
-                        $newBaselineParameters.Description = $newDescription.Trim()
-                    }
-                    $createdBaseline = New-EFBaseline @newBaselineParameters
-                    $activeBaseline = $createdBaseline.Path
-                    $resolvedBaseline = Resolve-EFBaseline -Baseline $activeBaseline
-                    $lastSummary = $null
-                    $lastPlan = $null
-                    $lastPreview = $null
-                    $lastRemediation = $null
-                    Write-EFMenuLine -Text ("[CREATED] {0}" -f $createdBaseline.Path) -Color Green -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text ("Schema: {0}" -f $createdBaseline.SchemaPath) -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'The new baseline is now active. Review it before planning or applying changes.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Create baseline' 'Completed' $createdBaseline.Path
+                    if (-not $running) { break MainLoop }
                     break
                 }
+
+                '^(A|ADVANCED|TOOLS)$' {
+                    :ToolsLoop while ($running) {
+                        Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'Tools for IT scripts and troubleshooting' -Color Cyan -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'These choices explain technical details. They do not change Windows.' -Color Green -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '1. Show readiness and missing Windows features' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '2. Show PowerShell command examples' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text '3. Show the latest script result code' -NoColor:$effectiveNoColor -Width $width
+                        Write-EFMenuLine -Text 'B. Back to the main menu' -NoColor:$effectiveNoColor -Width $width
+                        $toolChoice = Read-EFMenuInput -Prompt 'Choose a technical tool'
+                        if ($null -eq $toolChoice) { $exitReason = 'InputClosed'; $running = $false; break ToolsLoop }
+                        switch ($toolChoice.Trim().ToUpperInvariant()) {
+                            '1' {
+                                $actionCount++
+                                $readiness = Get-EFEndpointReadiness -Baseline $activeBaseline
+                                Write-EFMenuReadiness -Readiness $readiness -NoColor:$effectiveNoColor -Width $width
+                                & $addHistory 'Readiness details' 'Viewed' $readiness.Status
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ToolsLoop }
+                            }
+                            '2' {
+                                $actionCount++
+                                Write-EFMenuLine -Text 'Read-only check: Get-EFEndpointSummary -NoProgress' -NoColor:$effectiveNoColor -Width $width
+                                Write-EFMenuLine -Text 'Read-only plan: Get-EFRemediationPlan -NoProgress' -NoColor:$effectiveNoColor -Width $width
+                                Write-EFMenuLine -Text 'No-change preview: Invoke-EFEndpointRemediation -ControlId <approved IDs> -WhatIf' -NoColor:$effectiveNoColor -Width $width
+                                Write-EFMenuLine -Text 'Human report: Get-EFEndpointSummary -NoProgress | Export-EFEndpointReport -Path .\check.html' -NoColor:$effectiveNoColor -Width $width
+                                Write-EFMenuLine -Text 'Several computers: Get-EFFleetSummary -ComputerName PC1,PC2' -NoColor:$effectiveNoColor -Width $width
+                                Write-EFMenuLine -Text 'Compare JSON reports: Compare-EFEndpointSummary .\before.json .\after.json' -NoColor:$effectiveNoColor -Width $width
+                                & $addHistory 'PowerShell examples' 'Viewed' 'Command examples displayed.'
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ToolsLoop }
+                            }
+                            '3' {
+                                $actionCount++
+                                if ($null -eq $lastSummary) {
+                                    Write-EFMenuLine -Text '[NOT READY] Run a computer check first.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
+                                }
+                                else {
+                                    Write-EFMenuLine -Text ("For scripts: result code {0}. 0 means okay; 1 needs attention; 2 has an urgent or mismatched setting; 3 means information could not be checked." -f $lastSummary.ExitCode) -NoColor:$effectiveNoColor -Width $width
+                                }
+                                if (-not (& $pause)) { $exitReason = 'InputClosed'; $running = $false; break ToolsLoop }
+                            }
+                            { $_ -in @('B', 'BACK', 'Q') } { break ToolsLoop }
+                            default { Write-EFMenuLine -Text '[INVALID] Choose 1-3 or B.' -Color Yellow -NoColor:$effectiveNoColor -Width $width }
+                        }
+                    }
+                    if (-not $running) { break MainLoop }
+                    break
+                }
+
                 '^(H|HELP|\?)$' {
                     $currentAction = 'Help'
                     $actionCount++
-                    Write-EFMenuLine -Text '' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'Safety guide' -Color Cyan -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text '1-3 only read endpoint state. Option 4 uses PowerShell WhatIf and cannot change state.' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'Option 5 applies only the controls you select. It requires Administrator access, always runs a fresh preview, and requires you to type APPLY exactly.' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'EndpointForge never restarts the endpoint. A result may tell you that a restart should be scheduled through your normal change process.' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'Options 6 and 8 write files. Selecting or creating a baseline clears cached results so they cannot be mistaken for results from the new baseline.' -NoColor:$effectiveNoColor -Width $width
-                    Write-EFMenuLine -Text 'For automation, leave the menu and use Get-EFEndpointSummary, Get-EFRemediationPlan, Export-EFEndpointReport, and Invoke-EFEndpointRemediation directly.' -NoColor:$effectiveNoColor -Width $width
-                    & $addHistory 'Help' 'Viewed' 'Safety guide displayed.'
+                    Write-EFMenuHelp -NoColor:$effectiveNoColor -Width $width
+                    & $addHistory 'Help' 'Viewed' 'Plain-language glossary displayed.'
+                    if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
                     break
                 }
+
                 '^(Q|QUIT|EXIT)$' {
                     $exitReason = 'Quit'
                     $running = $false
-                    $shouldPause = $false
                     break
                 }
+
                 default {
-                    Write-EFMenuLine -Text '[INVALID] Choose 1-8, H, or Q.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
-                    $shouldPause = $false
+                    Write-EFMenuLine -Text '[INVALID] Choose 1-6, A, H, or Q.' -Color Yellow -NoColor:$effectiveNoColor -Width $width
                 }
             }
         }
-        catch [System.Management.Automation.PipelineStoppedException] {
-            throw
-        }
+        catch [System.Management.Automation.PipelineStoppedException] { throw }
         catch {
-            $errorRecord = [pscustomobject]@{
+            $menuErrors.Add([pscustomobject]@{
                 PSTypeName = 'EndpointForge.MenuError'
                 AtUtc      = [DateTime]::UtcNow
                 Action     = $currentAction
                 Message    = $_.Exception.Message
                 ErrorId    = $_.FullyQualifiedErrorId
-            }
-            $null = $menuErrors.Add($errorRecord)
+            })
             & $addHistory $currentAction 'Failed' $_.Exception.Message
-            Write-EFMenuLine -Text ("[ERROR] {0}" -f $_.Exception.Message) -Color Red -NoColor:$effectiveNoColor -Width $width
-            Write-EFMenuLine -Text 'The menu is still active. Correct the issue or choose another action.' -NoColor:$effectiveNoColor -Width $width
-        }
-
-        if ($shouldPause -and -not $NoPause -and $running) {
-            $pauseInput = Read-EFMenuInput -Prompt 'Press Enter to return to the menu'
-            if ($null -eq $pauseInput) {
-                $exitReason = 'InputClosed'
-                break MenuLoop
-            }
+            Write-EFMenuLine -Text ("[COULD NOT COMPLETE] {0}" -f $_.Exception.Message) -Color Red -NoColor:$effectiveNoColor -Width $width
+            Write-EFMenuLine -Text 'Windows was not assumed changed. Review the message, then choose another action or try again.' -NoColor:$effectiveNoColor -Width $width
+            if (-not (& $pause)) { $exitReason = 'InputClosed'; break MainLoop }
         }
     }
 
     if ($PassThru) {
         [pscustomobject]@{
             PSTypeName       = 'EndpointForge.MenuSession'
+            SchemaVersion    = '1.1'
             ComputerName     = $computerName
             StartedAtUtc     = $startedAtUtc
             CompletedAtUtc   = [DateTime]::UtcNow
             ExitReason       = $exitReason
             IsRemoteSession  = $isRemoteSession
             IsAdministrator  = $isAdministrator
+            ChecklistName    = [string]$resolvedBaseline.Name
+            ChecklistVersion = [string]$resolvedBaseline.Version
             BaselineName     = [string]$resolvedBaseline.Name
             BaselineVersion  = [string]$resolvedBaseline.Version
-            BaselinePath     = [string](Get-EFPropertyValue -InputObject $resolvedBaseline -Name 'SourcePath')
+            BaselinePath     = [string](Get-EFPropertyValue $resolvedBaseline 'SourcePath' '')
             ReportDirectory  = $resolvedReportDirectory
             ActionCount      = $actionCount
             ErrorCount       = $menuErrors.Count
             LastExportPath   = $lastExportPath
+            Readiness        = $readiness
             LastSummary      = $lastSummary
+            PreviousSummary  = $previousSummary
+            LastComparison   = $lastComparison
             LastPlan         = $lastPlan
             LastPreview      = $lastPreview
             LastRemediation  = $lastRemediation
+            LastFleet        = $lastFleet
             History          = @($history)
             Errors           = @($menuErrors)
         }

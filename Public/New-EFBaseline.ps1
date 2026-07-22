@@ -1,24 +1,25 @@
 function New-EFBaseline {
     <#
     .SYNOPSIS
-    Creates a validated EndpointForge baseline JSON file.
+    Creates a validated starter Windows settings checklist.
 
     .DESCRIPTION
-    Creates a safe starting baseline from a maintained template, validates it with the
-    same runtime contract used by compliance commands, and writes UTF-8 without a BOM.
-    The command supports WhatIf and never overwrites unless Force is specified.
+    A checklist is a list of Windows settings and expected values; scripts call it a
+    baseline. This command copies a maintained starter template, validates it, and writes
+    UTF-8 JSON plus its schema. It does not apply the checklist or change Windows. A
+    PowerShell WhatIf preview creates no files, and existing files require Force.
 
     .PARAMETER Name
-    A stable organization baseline name such as Contoso.Workstation.
+    A stable organization checklist name such as Contoso.Workstation.
 
     .PARAMETER Path
     The output JSON path. A directory path writes <Name>.json inside that directory.
 
     .PARAMETER Description
-    A human-readable purpose and scope for the baseline.
+    A plain-language purpose and scope for the checklist.
 
     .PARAMETER Version
-    The semantic version for the new baseline.
+    The semantic version for the new checklist.
 
     .PARAMETER Template
     Starter includes firewall, UAC, and Windows Update controls;
@@ -26,7 +27,7 @@ function New-EFBaseline {
     BitLocker, Secure Boot, and TPM audit controls.
 
     .PARAMETER Force
-    Replaces an existing baseline file.
+    Replaces an existing checklist file.
 
     .EXAMPLE
     New-EFBaseline -Name Contoso.Workstation -Template Starter -Path .\baselines
@@ -58,7 +59,7 @@ function New-EFBaseline {
     )
 
     if ([string]::IsNullOrWhiteSpace($Description)) {
-        $Description = "$Name endpoint compliance baseline."
+        $Description = "$Name Windows settings checklist. Review it before use."
     }
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -95,7 +96,7 @@ function New-EFBaseline {
     }
     Assert-EFBaseline -Baseline $baseline
 
-    if (-not $PSCmdlet.ShouldProcess($targetPath, "Create $Template EndpointForge baseline")) {
+    if (-not $PSCmdlet.ShouldProcess($targetPath, "Create $Template EndpointForge checklist")) {
         return
     }
 

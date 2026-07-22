@@ -74,7 +74,11 @@ function Assert-EFBaseline {
         if ($severity -notin @('Low', 'Medium', 'High', 'Critical')) {
             throw [System.IO.InvalidDataException]::new("Control '$id' has invalid Severity '$severity'.")
         }
-        foreach ($textProperty in @('Id', 'Title', 'Description', 'Type', 'Severity', 'Path', 'ValueName', 'Name', 'Property', 'StartupType', 'Status', 'MountPoint')) {
+        foreach ($textProperty in @(
+            'Id', 'Title', 'Description', 'WhyItMatters', 'HowChecked', 'WhatWouldChange',
+            'ManualAction', 'SafetyNotes', 'RecoveryGuidance', 'Type', 'Severity', 'Path',
+            'ValueName', 'Name', 'Property', 'StartupType', 'Status', 'MountPoint'
+        )) {
             if (Test-EFPropertyPresent -InputObject $control -Name $textProperty) {
                 & $assertSafeText (Get-EFPropertyValue -InputObject $control -Name $textProperty) "Control '$id' $textProperty"
             }

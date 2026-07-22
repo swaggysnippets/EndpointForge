@@ -1,21 +1,26 @@
 function Get-EFComplianceReport {
     <#
     .SYNOPSIS
-    Gets a detailed compliance report for the local Windows endpoint.
+    Checks this computer against a Windows settings checklist.
 
     .DESCRIPTION
-    Evaluates each selected baseline control without changing endpoint state. The rich
-    report includes results, score, guidance, and a deterministic ExitCode: 0 compliant,
-    2 noncompliant, or 3 when one or more controls could not be evaluated.
+    Reads each selected Windows setting and compares it with the expected value in a
+    checklist. It does not change Windows. In script output, a checklist is called a
+    baseline and each checklist item is called a control. Those names are retained so
+    existing PowerShell automation remains compatible.
+
+    The report includes results, a score, guidance, and a predictable ExitCode for
+    scripts: 0 when checked items match, 2 when an item does not match, or 3 when one or
+    more items could not be checked.
 
     Use Test-EFEndpointCompliance when a simple Boolean answer is needed.
 
     .PARAMETER Baseline
-    A built-in baseline name, a JSON file path, or a baseline object returned by
-    Get-EFBaseline.
+    The checklist to use: a built-in name, a checklist JSON file, or an object returned
+    by Get-EFBaseline.
 
     .PARAMETER ControlId
-    One or more control identifiers to evaluate. All controls are evaluated by default.
+    One or more checklist item IDs to check. Every item is checked by default.
 
     .PARAMETER NoProgress
     Suppresses the progress display for non-interactive automation hosts.
@@ -63,24 +68,24 @@ function Get-EFComplianceReport {
         foreach ($control in $controls) {
             $controlIndex++
             if (-not $NoProgress) {
-                Write-Progress -Id 1102 -Activity 'EndpointForge compliance' `
-                    -Status "Evaluating $($control.Id): $($control.Title)" `
+                Write-Progress -Id 1102 -Activity 'EndpointForge Windows settings check' `
+                    -Status "Checking: $($control.Title)" `
                     -PercentComplete ([math]::Round(($controlIndex / $controls.Count) * 100))
             }
             $controlResult = Get-EFControlState -Control $control
             if ($controlResult.Status -eq 'NonCompliant' -and $controlResult.Remediable) {
                 $controlResult.RecommendedAction = if ($null -ne $baselineCommandArgument) {
-                    "Preview automatic remediation: Invoke-EFEndpointRemediation $baselineCommandArgument -ControlId '$($controlResult.ControlId)' -WhatIf"
+                    "Preview this supported fix before approval. For scripts: Invoke-EFEndpointRemediation $baselineCommandArgument -ControlId '$($controlResult.ControlId)' -WhatIf"
                 }
                 else {
-                    'Pass this same in-memory baseline to Get-EFRemediationPlan, then review Invoke-EFEndpointRemediation -WhatIf.'
+                    'Create a fix plan from this same in-memory checklist, then preview the supported change before approval.'
                 }
             }
             $controlResult
         }
     )
     if (-not $NoProgress) {
-        Write-Progress -Id 1102 -Activity 'EndpointForge compliance' -Completed
+        Write-Progress -Id 1102 -Activity 'EndpointForge Windows settings check' -Completed
     }
 
     $compliantCount = @($results | Where-Object Status -eq 'Compliant').Count
@@ -96,22 +101,22 @@ function Get-EFComplianceReport {
     $exitCode = if ($errorCount -gt 0) { 3 } elseif ($nonCompliantCount -gt 0) { 2 } else { 0 }
     $status = if ($nonCompliantCount -gt 0) { 'NonCompliant' } elseif ($errorCount -gt 0) { 'Incomplete' } else { 'Compliant' }
     $summaryText = if ($isCompliant) {
-        "$compliantCount applicable control(s) are compliant."
+        "$compliantCount applicable checklist item(s) match the expected settings."
     }
     elseif ($errorCount -gt 0) {
-        "Evaluation is incomplete: $nonCompliantCount noncompliant control(s) and $errorCount error(s)."
+        "The check is incomplete: $nonCompliantCount item(s) do not match and $errorCount could not be checked."
     }
     else {
-        "$nonCompliantCount control(s) require attention; compliance score is $score%."
+        "$nonCompliantCount checklist item(s) need attention. $score% of the settings that could be checked match."
     }
     $nextStep = if ($isCompliant) {
-        'No remediation is required.'
+        'No supported fix is needed.'
     }
     elseif ($errorCount -gt 0) {
-        'Review Results.RecommendedAction. Privileged security checks may require an elevated PowerShell session.'
+        'Review the items that could not be checked. Some protected information requires PowerShell to be opened with Run as Administrator (also called an elevated session).'
     }
     else {
-        'Run Get-EFRemediationPlan to separate automatic and manual actions.'
+        'Create a fix plan to see what EndpointForge can safely preview and what needs a person to review.'
     }
 
     $report = [pscustomobject]@{
@@ -119,6 +124,9 @@ function Get-EFComplianceReport {
         ComputerName        = $env:COMPUTERNAME
         BaselineName        = [string]$resolvedBaseline.Name
         BaselineVersion     = [string]$resolvedBaseline.Version
+        ChecklistName       = [string]$resolvedBaseline.Name
+        ChecklistVersion    = [string]$resolvedBaseline.Version
+        ChecklistItemCount  = $controls.Count
         CorrelationId       = $correlationId
         EvaluatedAtUtc      = [DateTime]::UtcNow
         IsCompliant         = $isCompliant

@@ -1,18 +1,23 @@
 function Get-EFEndpointSummary {
     <#
     .SYNOPSIS
-    Gets one combined endpoint health and compliance summary.
+    Gets one combined computer health and Windows settings checkup.
 
     .DESCRIPTION
-    Provides the recommended first-run experience for EndpointForge. It combines device
-    identity, inventory, operational health, pending restart, compliance, data coverage,
-    actionable findings, and stable exit codes in one pipeline-friendly object.
+    Provides the recommended first check for EndpointForge. It reads computer details,
+    everyday health, restart status, and important Windows settings, then explains what
+    needs attention. It does not change Windows.
+
+    EndpointForge calls the Windows settings checklist a baseline in script properties so
+    existing automation remains compatible. No knowledge of configuration frameworks is
+    required to use the returned guidance.
 
     .PARAMETER Baseline
-    A built-in baseline name, JSON path, or validated baseline object.
+    The checklist of expected Windows settings: a built-in name, JSON path, or validated
+    checklist object.
 
     .PARAMETER ControlId
-    Limits compliance evaluation to selected controls.
+    Limits the check to selected checklist item IDs.
 
     .PARAMETER IncludeSoftware
     Includes installed software in the nested Inventory object.
@@ -59,13 +64,13 @@ function Get-EFEndpointSummary {
     $correlationId = [guid]::NewGuid().ToString()
     try {
         if (-not $NoProgress) {
-            Write-Progress -Id 1100 -Activity 'EndpointForge endpoint summary' -Status 'Collecting inventory and health' -PercentComplete 10
+            Write-Progress -Id 1100 -Activity 'EndpointForge computer checkup' -Status 'Reading computer health' -PercentComplete 10
         }
         $health = Get-EFEndpointHealth -MinimumFreeSpacePercent $MinimumFreeSpacePercent `
             -MaximumUptimeDays $MaximumUptimeDays -IncludeSoftware:$IncludeSoftware -NoProgress
 
         if (-not $NoProgress) {
-            Write-Progress -Id 1100 -Activity 'EndpointForge endpoint summary' -Status 'Evaluating compliance' -PercentComplete 60
+            Write-Progress -Id 1100 -Activity 'EndpointForge computer checkup' -Status 'Checking recommended Windows settings' -PercentComplete 60
         }
         $complianceParameters = @{
             Baseline   = $Baseline
@@ -77,7 +82,7 @@ function Get-EFEndpointSummary {
         $compliance = Get-EFComplianceReport @complianceParameters
 
         if (-not $NoProgress) {
-            Write-Progress -Id 1100 -Activity 'EndpointForge endpoint summary' -Status 'Prioritizing findings' -PercentComplete 90
+            Write-Progress -Id 1100 -Activity 'EndpointForge computer checkup' -Status 'Explaining what needs attention' -PercentComplete 90
         }
 
         $findings = [Collections.Generic.List[object]]::new()
@@ -106,6 +111,18 @@ function Get-EFEndpointSummary {
                 Message           = [string]$check.Message
                 SuggestedAction   = $suggestedAction
                 RequiresElevation = $false
+                WhyItMatters      = switch -Wildcard ([string]$check.Id) {
+                    'DiskFreeSpace' { 'Windows and applications need free disk space to update and work reliably.' }
+                    'Uptime' { 'Regular approved restarts allow completed updates and maintenance to take effect.' }
+                    'PendingReboot' { 'Some updates and configuration changes do not finish until Windows restarts.' }
+                    'Firewall*' { 'The Windows firewall helps block unwanted network connections.' }
+                    'Defender*' { 'Real-time threat protection helps detect harmful files and activity.' }
+                    'BitLocker*' { 'Drive encryption helps protect files if a computer or drive is lost.' }
+                    default { 'This check helps describe the computer''s current health and protection.' }
+                }
+                HowChecked        = 'EndpointForge read the related Windows status. It did not change the setting.'
+                WhatWouldChange   = 'Nothing during this check.'
+                ManualAction      = $suggestedAction
             })
         }
         foreach ($controlResult in @($compliance.Results | Where-Object Status -in @('NonCompliant', 'Error'))) {
@@ -120,6 +137,13 @@ function Get-EFEndpointSummary {
                 Message           = [string]$controlResult.Message
                 SuggestedAction   = [string]$controlResult.RecommendedAction
                 RequiresElevation = [bool]$requiresElevation
+                ActualValue       = Get-EFPropertyValue -InputObject $controlResult -Name 'ActualValue'
+                DesiredValue      = Get-EFPropertyValue -InputObject $controlResult -Name 'DesiredValue'
+                WhyItMatters      = [string](Get-EFPropertyValue -InputObject $controlResult -Name 'WhyItMatters' -Default '')
+                HowChecked        = [string](Get-EFPropertyValue -InputObject $controlResult -Name 'HowChecked' -Default '')
+                WhatWouldChange   = [string](Get-EFPropertyValue -InputObject $controlResult -Name 'WhatWouldChange' -Default '')
+                ManualAction      = [string](Get-EFPropertyValue -InputObject $controlResult -Name 'ManualAction' -Default $controlResult.RecommendedAction)
+                SafetyNotes      = [string](Get-EFPropertyValue -InputObject $controlResult -Name 'SafetyNotes' -Default '')
             })
         }
 
@@ -191,13 +215,13 @@ function Get-EFEndpointSummary {
                 switch ($_.Severity) { 'Critical' { 0 } 'High' { 1 } 'Warning' { 2 } 'Medium' { 3 } 'Low' { 4 } default { 5 } }
             } }, Source, Id)
         $nextStep = if ($compliance.ErrorCount -gt 0) {
-            'Resolve incomplete checks, often by running elevated, then run Get-EFEndpointSummary again.'
+            'Some settings could not be checked. Open PowerShell with Run as Administrator (an elevated session), then run the computer checkup again.'
         }
         elseif ($compliance.NonCompliantCount -gt 0) {
-            'Run Get-EFRemediationPlan, then preview approved changes with Invoke-EFEndpointRemediation -WhatIf.'
+            'Open the safe fix assistant to review supported fixes. It will show a preview before any change can be approved.'
         }
         elseif ($health.Status -ne 'Healthy') {
-            'Review Findings and address the health warnings before the next assessment.'
+            'Review the items needing attention and follow the plain-language guidance before the next checkup.'
         }
         else {
             'No action is required.'
@@ -212,6 +236,13 @@ function Get-EFEndpointSummary {
             OverallStatus       = $overallStatus
             HealthStatus        = $health.Status
             ComplianceStatus    = $complianceStatus
+            ChecklistName       = [string](Get-EFPropertyValue -InputObject $compliance -Name 'ChecklistName' -Default (
+                Get-EFPropertyValue -InputObject $compliance -Name 'BaselineName' -Default ''
+            ))
+            BaselineName        = [string](Get-EFPropertyValue -InputObject $compliance -Name 'BaselineName' -Default '')
+            ChecklistVersion    = [string](Get-EFPropertyValue -InputObject $compliance -Name 'ChecklistVersion' -Default (
+                Get-EFPropertyValue -InputObject $compliance -Name 'BaselineVersion' -Default ''
+            ))
             DataStatus          = $dataStatus
             Score               = $score
             HealthScore         = $health.Score
@@ -228,6 +259,7 @@ function Get-EFEndpointSummary {
             DiskFreePercent     = $inventory.SystemDriveFreePercent
             Security            = $security
             NextStep            = $nextStep
+            AutomationNextStep  = if ($compliance.NonCompliantCount -gt 0) { 'Get-EFRemediationPlan' } elseif ($compliance.ErrorCount -gt 0) { 'Get-EFEndpointSummary -NoProgress' } else { $null }
             CorrelationId       = $correlationId
             StartedAtUtc        = [DateTime]::UtcNow.Subtract($timer.Elapsed)
             CompletedAtUtc      = [DateTime]::UtcNow
@@ -240,7 +272,7 @@ function Get-EFEndpointSummary {
     }
     finally {
         if (-not $NoProgress) {
-            Write-Progress -Id 1100 -Activity 'EndpointForge endpoint summary' -Completed
+            Write-Progress -Id 1100 -Activity 'EndpointForge computer checkup' -Completed
         }
         if ($timer.IsRunning) {
             $timer.Stop()

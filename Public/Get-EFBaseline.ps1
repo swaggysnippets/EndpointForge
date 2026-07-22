@@ -1,20 +1,22 @@
 function Get-EFBaseline {
     <#
     .SYNOPSIS
-    Gets a built-in or file-based EndpointForge compliance baseline.
+    Loads a built-in or file-based Windows settings checklist.
 
     .DESCRIPTION
-    Loads and validates an EndpointForge JSON baseline. ListAvailable returns metadata
-    without evaluating the endpoint. Custom baselines are validated before use.
+    A checklist is a list of Windows settings and their expected values. PowerShell
+    commands call it a baseline for compatibility. This command loads and validates the
+    JSON file; it does not check or change a computer. ListAvailable shows the checklists
+    included with the module.
 
     .PARAMETER Name
-    The built-in baseline name. EnterpriseRecommended is the default.
+    The built-in checklist name. EnterpriseRecommended is the default.
 
     .PARAMETER Path
-    The path to a custom JSON baseline.
+    The path to a custom checklist JSON file.
 
     .PARAMETER ListAvailable
-    Lists metadata for every baseline bundled with the installed module.
+    Lists information about every checklist included with the installed module.
 
     .EXAMPLE
     Get-EFBaseline -Name EnterpriseRecommended

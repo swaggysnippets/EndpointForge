@@ -2,221 +2,497 @@ TOPIC
     about_EndpointForge
 
 SHORT DESCRIPTION
-    Enterprise-safe Windows endpoint inventory, health, compliance, remediation, and reporting.
+    Beginner-friendly Windows computer checkups, safe fix previews, comparisons, and reports.
 
 LONG DESCRIPTION
-    EndpointForge is a local endpoint automation module intended for execution through
-    Intune, Configuration Manager, RMM systems, scheduled tasks, or PowerShell remoting.
+    A checklist is simply a list of Windows settings and the expected value for each
+    setting. Selecting one does not apply it or change Windows. EndpointForge helps a
+    person answer four practical questions about a Windows computer:
 
-    Read-only commands return structured objects. Show-EFEndpointSummary provides a
-    terminal view for people without changing the underlying automation contract.
-    Show-EFMenu provides a guided interactive path across assessment, planning, preview,
-    guarded remediation, baseline authoring, and export. Remediation supports WhatIf and
-    Confirm, requires elevation when changes are needed, and modifies only controls
-    explicitly marked Remediable.
+        1. Does this computer look healthy?
+        2. Do important Windows settings match the selected checklist?
+        3. Which problems can EndpointForge safely preview and fix?
+        4. What changed between an earlier check and a later check?
 
-    The module does not reboot endpoints, enable BitLocker, change firmware, clear TPMs,
-    install software, query Win32_Product, or download and execute remote content.
+    The guided menu uses everyday language and labels whether each choice reads
+    information, creates a file, or can change a Windows setting. Normal checks do not
+    change Windows. A supported fix is never applied until it has been selected,
+    previewed, and explicitly approved.
 
-60-SECOND FIRST RUN
-    Install for the current user with one of these commands:
+    EndpointForge works in Windows PowerShell 5.1 and PowerShell 7 on supported Windows
+    client and server versions. Its commands can also be used in approved scripts,
+    scheduled tasks, Intune, Configuration Manager, RMM systems, and PowerShell remote
+    sessions.
 
-        Install-PSResource -Name EndpointForge -Scope CurrentUser
+FIRST RUN
+    Install EndpointForge for the current Windows user:
 
         Install-Module -Name EndpointForge -Scope CurrentUser
 
-    Then open the guided operator menu:
+    Import it and open the guided menu:
 
         Import-Module EndpointForge
         Show-EFMenu
 
-    The menu starts with read-only actions and clearly labels actions that write files or
-    can change the endpoint. For a direct read-only check instead:
+    Start with menu option 1, Check this computer now. The check reads computer health,
+    restart status, security information, and selected Windows settings. It does not
+    change Windows.
 
-        Get-EFEndpointSummary | Show-EFEndpointSummary -Detailed
+    Some protected information and all approved fixes require a PowerShell window opened
+    with Run as administrator. A standard-user window can still run normal checks and
+    no-change previews.
 
-    Use -NoColor for plain text, -NoProgress for quiet collection, and -PassThru to
-    receive one menu-session object after quitting.
+EVERYDAY TERMS
+    EndpointForge uses plain wording in its menu. PowerShell commands retain several
+    technical names so existing scripts remain compatible.
 
-COMMAND LAYERS
-    Show-EFMenu is the interactive operator layer. It keeps the current baseline,
-    assessment, plan, preview, remediation result, and export path together for one menu
-    session. It is host-output only by default. Use the direct object commands below for
-    unattended automation.
+    Checklist
+        A list of Windows settings and the expected value for each setting. Selecting a
+        checklist does not apply it and does not change Windows.
 
-    Menu remediation always generates a fresh plan, lets the operator select automatic
-    controls, runs WhatIf, requires Administrator access, and then requires the exact
-    APPLY acknowledgement. -NoPause never bypasses those safeguards. The menu never
-    restarts the endpoint.
+    Baseline
+        The script-facing name for a checklist. A parameter named Baseline asks which
+        checklist to use.
 
-    Get-EFEndpointSummary combines identity, health, restart, compliance, and collection
-    quality into one pipeline-friendly object. Use -IncludeSoftware only when the larger
-    software payload is needed. Use -NoProgress in non-interactive hosts.
+    Checklist item
+        One setting in a checklist.
 
-    Show-EFEndpointSummary renders the summary for a person. It accepts summary objects
-    from the pipeline or can collect its own summary. Use -PassThru to preserve the input
-    object in the pipeline. Scripts should consume Get-EFEndpointSummary output, not parse
-    the rendered terminal text.
+    Control
+        The script-facing name for a checklist item. ControlId is the item's stable name
+        for scripts, such as EF-FW-DOMAIN.
 
-    Test-EFEndpointCompliance returns a Boolean by default and can be used directly in an
-    if statement. Get-EFComplianceReport returns the full report, including Results,
-    Score, and ExitCode. Test-EFEndpointCompliance -PassThru is an equivalent way to ask
-    for that report.
+    Matches
+        EndpointForge read the current value and it equals the checklist value.
 
-    Get-EFRemediationPlan explains what is compliant, actionable, non-remediable, or
-    unavailable before changes begin. -IncludeCompliant returns the full decision set.
-    -ControlId limits planning to explicitly selected controls.
+    Compliance
+        The technical name for comparing current settings with a checklist. Compliant
+        means a setting matches. NonCompliant means it was read successfully but does not
+        match. Compliance checking by itself never changes Windows.
 
-RECOMMENDED OPERATOR WORKFLOW
-    Use observe, validate, plan, preview, apply, verify, and export in that order.
+    Supported fix
+        A narrow setting change EndpointForge knows how to preview, apply, and check
+        again. Many findings are intentionally report-only.
 
-    Interactive workflow:
+    Remediation
+        The script-facing name for applying a supported fix. A remediation plan only
+        explains possible actions; it does not change Windows.
 
-        Show-EFMenu
+    Preview or WhatIf
+        A no-change rehearsal. PowerShell calls this WhatIf and uses the -WhatIf switch.
+        A preview shows what a supported fix would try to change without making the
+        change.
 
-    Object-first or unattended workflow:
+    Could not check
+        Windows did not provide a definite answer. This is not treated as passing,
+        matching, or fixed.
 
-    1. Observe:
+    Administrator or elevated session
+        A PowerShell window opened with Run as administrator. Windows requires this extra
+        permission for protected information and setting changes.
 
-        $summary = Get-EFEndpointSummary
-        $summary | Show-EFEndpointSummary -Detailed
+    Endpoint
+        An IT term for a managed computer.
 
-    2. Validate the selected baseline:
+    Receipt
+        A record of an attempted fix, including the value before, the value afterward,
+        the result, safety notes, and recovery guidance.
 
-        $baseline = Get-EFBaseline -Name EnterpriseRecommended
-        $baseline | Test-EFBaseline
+    HTML report
+        A self-contained web-page file intended for a person to read in a browser.
 
-    3. Review the change plan:
+    JSON report
+        A structured data file intended for scripts and support tools. It preserves more
+        nested technical detail than a human-readable report.
 
-        $plan = Get-EFRemediationPlan -Baseline $baseline -IncludeCompliant
-        $plan
+GOAL-BASED MENU
+    Show-EFMenu organizes work by the result a person wants:
 
-    4. Preview and apply approved controls:
+        1. Check this computer now
+           Reads information and does not change Windows.
 
-        $ids = 'EF-FW-DOMAIN', 'EF-UAC-ENABLED'
-        Invoke-EFEndpointRemediation -Baseline $baseline -ControlId $ids -WhatIf
-        $result = Invoke-EFEndpointRemediation -Baseline $baseline -ControlId $ids
+        2. Understand the latest results
+           Shows a simple summary, detailed explanations, earlier-versus-later changes,
+           and computer details.
 
-    5. Verify independently and export evidence:
+        3. Fix selected problems safely
+           Builds a plan, lets the user select supported fixes, performs a mandatory
+           preview, and asks for final approval before any setting change.
 
-        $verification = Get-EFComplianceReport -Baseline $baseline -ControlId $ids
-        $verification | Export-EFEndpointReport -Path .\verification.json -Force
+        4. Save reports or compare checks
+           Creates a readable HTML report, a detailed JSON report, or a comparison when
+           the user chooses that action.
 
-    Run the apply step from an elevated PowerShell session. Keep confirmation enabled
-    for interactive work. Use -Confirm:$false only in an approved non-interactive rollout
-    after testing the plan and WhatIf result in a representative pilot ring.
+        5. Check other computers
+           Runs read-only checks on computers that were already prepared for approved
+           PowerShell remote management. It never runs remote fixes.
 
-AUTOMATION RESULTS
-    Test-EFEndpointCompliance returns $true only when every applicable selected control
-    is compliant and no evaluation errors occurred. It returns $false otherwise.
+        6. Change what EndpointForge checks
+           Selects, loads, validates, or creates checklist files. Selecting a checklist
+           never applies its settings.
 
-    Compliance reports from Get-EFComplianceReport expose ExitCode:
+        A. Tools for IT scripts and troubleshooting
+        H. Help that explains every choice
+        Q. Exit
 
-        0  All applicable controls are compliant
-        2  One or more controls are noncompliant
-        3  One or more controls could not be evaluated
+    The menu keeps results only for the current menu session unless a report is saved.
+    Changing the checklist clears earlier menu results so results from different
+    checklists are not mistaken for one another.
 
-    Remediation reports expose ExitCode:
+READINESS
+    Readiness is a no-change preflight. It explains what the current PowerShell window is
+    prepared to check or fix:
 
-        0  Successfully remediated or no change required
-        2  Noncompliant controls remain
-        3  Evaluation, remediation, or verification failure
+        Get-EFEndpointReadiness
 
-    Health reports expose ExitCode:
+    It checks whether the platform is Windows, whether the checklist is valid, whether
+    the current window has Administrator permission, whether it is a remote session, and
+    whether Windows provides the commands required by each checklist item. It does not
+    read the actual policy values and does not change anything.
 
-        0  Healthy
-        1  Warning
-        2  Critical
+    A readiness result with limits does not mean the whole check failed. It means some
+    protected or unavailable items may be reported as Could not check or report-only.
+    Review the result details before deciding whether to reopen PowerShell with Run as
+    administrator.
 
-    Module functions never exit the hosting PowerShell process. A wrapper script should
-    read ExitCode and call exit only when required by its management platform.
+RUN A COMPUTER CHECK
+    The recommended read-only script command is:
 
-ELEVATION AND CAPABILITY RESULTS
-    Most inventory, summary, health, and compliance data is available to standard users.
-    Windows may protect read-only BitLocker, TPM, Secure Boot, and optional-feature
-    providers behind administrator privileges. Remediation requires elevation whenever a
-    change is needed.
+        $check = Get-EFEndpointSummary -NoProgress
+        $check | Show-EFEndpointSummary
 
-    NonCompliant means the current value was read and did not match the baseline.
+    Show every finding and its explanation:
 
-    NotApplicable means the feature, service, cmdlet, or hardware capability is absent or
-    unsupported. Confirm that the baseline is appropriate for that device class.
+        $check | Show-EFEndpointSummary -Detailed
 
-    Error means EndpointForge could not establish the current value. Read the result
-    message, check elevation and platform capability, and rerun. Do not treat Error as
-    compliant merely to obtain a passing score.
+    Get-EFEndpointSummary returns structured data for scripts. Show-EFEndpointSummary is
+    the display for people. Scripts should read object properties instead of parsing the
+    displayed text.
+
+    Include installed software only when it is needed because collection takes longer
+    and the resulting report contains more private device information:
+
+        $check = Get-EFEndpointSummary -IncludeSoftware -NoProgress
+
+UNDERSTAND RESULTS
+    The terminal translates script statuses into these descriptions:
+
+        Looks good
+            The health and checklist items that were read do not need attention.
+
+        Needs attention
+            A warning or checklist difference was found.
+
+        Urgent attention
+            A critical health or security difference was found.
+
+        Could not check everything
+            One or more answers were unavailable, protected, or failed to load.
+
+        Not used on this computer
+            The feature is absent or does not apply to this Windows computer.
+
+    Unknown information is never silently counted as healthy. Review WhyItMatters,
+    HowChecked, WhatWouldChange, ManualAction, SafetyNotes, and RecoveryGuidance when
+    those explanation fields are present.
+
+SAFE FIX FLOW
+    Menu option 3 is the safest interactive path. It always follows this order:
+
+        1. Run or reuse a read-only computer check.
+        2. Explain each item that needs attention.
+        3. Separate supported fixes from manual review and unavailable information.
+        4. Let the user select specific supported fixes.
+        5. Run a fresh WhatIf preview that cannot change Windows.
+        6. Stop if the preview is incomplete or reports a failure.
+        7. Require a PowerShell window opened with Run as administrator.
+        8. Show the computer, selected items, current values, expected values, and
+           possible restart impact.
+        9. Require the user to type APPLY exactly.
+       10. Apply only the selected items and check their new values.
+       11. Run a fresh computer check and show a before-and-after comparison.
+
+    A standard-user window may complete the preview. It then explains how to reopen
+    PowerShell as Administrator. EndpointForge does not restart itself with higher
+    permission and does not bypass Windows security prompts.
+
+    The equivalent script workflow is:
+
+        $plan = Get-EFRemediationPlan -NoProgress
+        $approvedIds = $plan.Steps |
+            Where-Object CanFixAutomatically |
+            Select-Object -ExpandProperty ControlId
+
+        Invoke-EFEndpointRemediation -ControlId $approvedIds -WhatIf -NoProgress
+
+        # Run only after approval, from an Administrator window.
+        $result = Invoke-EFEndpointRemediation `
+            -ControlId $approvedIds -Confirm:$false -NoProgress
+
+        $verification = Get-EFComplianceReport -ControlId $approvedIds -NoProgress
+
+    The low-level apply command uses normal PowerShell confirmation behavior. Scripts are
+    responsible for approval, selection, testing, and organizational change control. The
+    menu adds the extra exact APPLY acknowledgement.
+
+    The built-in EnterpriseRecommended checklist can offer narrow supported fixes for
+    Windows Firewall profiles, User Account Control, Microsoft Defender real-time
+    protection when Defender manages it, the SMB 1.0 optional feature, and the Windows
+    Update service start setting.
+
+    BitLocker, Secure Boot, and Trusted Platform Module readiness are report-only.
+    EndpointForge will not change them automatically.
+
+RECEIPTS, RESTARTS, AND RECOVERY
+    Each preview or applied fix returns a receipt. It records the before value, desired
+    value, after value, whether a change was applied, what changed, and available safety
+    and recovery guidance.
+
+    EndpointForge never restarts Windows automatically. A receipt may say that an
+    approved restart should be scheduled through the organization's normal process.
+
+    EndpointForge does not promise automatic rollback. Restoring a saved value is not
+    always safe because Group Policy, mobile-device management, Defender tamper
+    protection, a service dependency, another security product, or a later Windows
+    change may own the setting. Use the receipt's before value and RecoveryGuidance with
+    an approved recovery process. Identify and use the owning management system when a
+    centrally managed setting does not stay changed.
+
+SAVE REPORTS
+    Save a human-readable HTML report:
+
+        Get-EFEndpointSummary -NoProgress |
+            Export-EFEndpointReport -Path .\computer-check.html
+
+    The HTML file is self-contained. It uses embedded styling, loads no JavaScript,
+    fonts, or internet content, and encodes report values before placing them in the page.
+
+    Save detailed JSON data for scripts or support tools:
+
+        Get-EFEndpointSummary -NoProgress |
+            Export-EFEndpointReport -Path .\computer-check.json
+
+    CSV and CLIXML are also supported. The file extension selects the format. Existing
+    files require -Force. Export supports -WhatIf so a script can preview the file action.
+
+    Reports may contain computer names, hardware, network addresses, installed software,
+    security posture, checklist details, and change evidence. Store reports only in an
+    approved location with least-privilege permissions and appropriate retention.
+
+COMPARE EARLIER AND LATER CHECKS
+    Compare two saved JSON reports:
+
+        $difference = Compare-EFEndpointSummary `
+            -Before .\before.json -After .\after.json
+        $difference
+
+    Or compare two in-memory results:
+
+        $before = Get-EFEndpointSummary -NoProgress
+        # Approved maintenance happens here.
+        $after = Get-EFEndpointSummary -NoProgress
+        Compare-EFEndpointSummary -Before $before -After $after
+
+    The comparison separates definite improvements, newly detected problems, unchanged
+    items, newly available information, and items the later check could not read. A
+    missing or incomplete later result is never described as fixed.
+
+    By default, checks with different computer names are rejected. Use
+    -AllowDifferentComputer only for an intentional side-by-side view, not to measure
+    progress. A warning is also returned when the checklist name or version changed,
+    because that is not a like-for-like comparison.
+
+CHECK OTHER COMPUTERS WITHOUT CHANGING THEM
+    Get-EFFleetSummary checks several Windows computers and returns successful results and
+    connection failures in one object:
+
+        $fleet = Get-EFFleetSummary -ComputerName PC-101,PC-102
+        $fleet.Results
+        $fleet.Failures
+
+    This command is strictly read-only. Before it can work, every target computer must
+    already:
+
+        - allow PowerShell remoting under the organization's policy;
+        - have EndpointForge 0.4.0 or later installed; and
+        - allow the connecting account to run the check.
+
+    EndpointForge does not install itself remotely, enable WinRM, change TrustedHosts,
+    adjust firewall rules, or run remote fixes. It reports connection failures alongside
+    successful results.
+
+    Use a credential only when the approved environment requires one:
+
+        $credential = Get-Credential
+        Get-EFFleetSummary `
+            -ComputerName (Get-Content .\computers.txt) `
+            -Credential $credential
+
+    The credential is used for the remote connection and is not stored in the returned
+    fleet report. Check an affected computer directly before approving any fix.
+
+CHECKLISTS FOR AN ORGANIZATION
+    Load the built-in checklist:
+
+        $checklist = Get-EFBaseline -Name EnterpriseRecommended
+
+    Create an editable starter file and validate it:
+
+        New-EFBaseline `
+            -Name Contoso.Workstation `
+            -Template Starter `
+            -Path .\checklists\Contoso.Workstation.json
+
+        Test-EFBaseline `
+            -Path .\checklists\Contoso.Workstation.json `
+            -PassThru
+
+    Use the validated file for a read-only check:
+
+        Get-EFEndpointSummary `
+            -Baseline .\checklists\Contoso.Workstation.json `
+            -NoProgress
+
+    New-EFBaseline creates a starting file. It is not a substitute for organizational
+    review and testing. Template accepts Starter, EnterpriseRecommended, or AuditOnly.
+    The command supports -WhatIf and will not replace an existing file unless -Force is
+    used.
+
+    Custom checklist files are privileged configuration input. Review them, store them in
+    source control, and protect them from untrusted writes before an Administrator
+    process uses them. Validate after every edit and before every deployment.
+
+    EndpointForge supports Registry, Service, FirewallProfile, Defender,
+    WindowsOptionalFeature, BitLocker, SecureBoot, and Tpm checklist items. BitLocker,
+    SecureBoot, and Tpm items are report-only.
+
+COMMANDS FOR SCRIPTS
+    Commands whose names begin with Get or Test return PowerShell objects and do not
+    change Windows. Show commands display information for a person. New and Export
+    commands write files only when requested. Invoke-EFEndpointRemediation is the command
+    that can change supported Windows settings; -WhatIf turns it into a no-change preview.
+
+    Useful discovery commands are:
+
+        Get-Command -Module EndpointForge
+        Get-Help Show-EFMenu -Full
+        Get-Help Get-EFEndpointSummary -Full
+        Get-Help Invoke-EFEndpointRemediation -Full
+
+    Test-EFEndpointCompliance returns $true only when every applicable selected item
+    matches and no checking error occurred. Add -PassThru, or use
+    Get-EFComplianceReport, when a script needs details, scores, or an ExitCode.
+
+SCRIPT EXIT CODES
+    EndpointForge commands do not exit the hosting PowerShell process. They return an
+    ExitCode property. A wrapper script should call exit only when its management system
+    requires a process exit code.
+
+    Combined computer check and fleet check:
+
+        0  Checked items look good.
+        1  A warning or partial information needs attention.
+        2  A critical issue or checklist difference was found.
+        3  Required information could not be collected, or a fleet target failed.
+
+    Detailed compliance report:
+
+        0  All applicable checked items match.
+        2  One or more checked items do not match.
+        3  One or more checked items could not be evaluated.
+
+    Remediation report:
+
+        0  Approved fixes were verified, or no change was needed.
+        2  One or more selected items still do not match. A WhatIf preview normally
+           leaves an item unchanged, so review PreviewCount as well as ExitCode.
+        3  Checking, applying, or verifying one or more selected items failed.
+
+    Operational health report:
+
+        0  Healthy.
+        1  Warning.
+        2  Critical.
+
+SECURITY BOUNDARIES
+    EndpointForge intentionally does not:
+
+        - restart Windows;
+        - install updates or other software;
+        - turn on BitLocker or start drive encryption;
+        - change Secure Boot, firmware, or Trusted Platform Module settings;
+        - clear a Trusted Platform Module;
+        - install itself on another computer or enable PowerShell remoting;
+        - query Win32_Product for installed software;
+        - download and execute remote content;
+        - bypass Group Policy, mobile-device management, Defender tamper protection,
+          application-control policy, or another security product;
+        - apply an automatic menu change without selection, preview, Administrator
+          permission, and exact APPLY acknowledgement; or
+        - promise automatic rollback.
+
+    Installed software is read from Windows uninstall registry records. Unsupported or
+    unavailable Windows features are reported instead of silently omitted.
+
+    Follow organizational execution-policy and application-control requirements. Do not
+    bypass a centrally managed policy. Reinstalling this module does not override Group
+    Policy.
 
 TROUBLESHOOTING
-    If a result says Requires elevation, Access denied, Unable to set proper privileges,
-    or that TPM status was not returned:
+    If a result says Could not check, Access denied, Requires elevation, or that a
+    protected security value was not returned:
 
-        1. Open Windows Terminal or PowerShell with Run as administrator.
-        2. Rerun Get-EFEndpointSummary | Show-EFEndpointSummary -Detailed.
-        3. If access is still denied, check MDM, Group Policy, Defender tamper protection,
-           and application-control policy.
+        1. Run Get-EFEndpointReadiness.
+        2. Open PowerShell with Run as administrator when approved.
+        3. Run the detailed check again:
 
-    To inspect unavailable compliance controls without relying on terminal color:
+           Get-EFEndpointSummary -NoProgress |
+               Show-EFEndpointSummary -Detailed
 
-        $report = Get-EFComplianceReport
-        $report.Results |
-            Where-Object Status -in 'Error', 'NotApplicable' |
-            Format-Table ControlId, Status, Message -Wrap
+        4. If the result remains unavailable, confirm that the Windows edition, server
+           role, virtual machine, firmware mode, and hardware support the feature.
 
-    If Secure Boot, TPM, BitLocker, Defender, or optional-feature data remains
-    NotApplicable after an elevated run, the capability may not exist on that Windows
-    edition, Server role, virtual machine, firmware mode, or hardware model. Use a
-    device-class-specific baseline when the absence is intentional.
+    If a fix reports PartiallyChanged, EndpointForge observed a changed after-value before
+    a later step reported an error. Review the before and after values plus recovery
+    guidance immediately; do not assume the earlier value is still active.
 
-    If remediation reports VerificationFailed, check whether Group Policy, MDM, tamper
-    protection, or a service immediately restored the original state. Also inspect:
+    If a fix reports VerificationFailed or does not stay changed, Group Policy, Intune,
+    another management product, Defender tamper protection, or a security agent may own
+    the setting. Review the receipt and use the owning system for the lasting change.
 
-        $result.Results |
-            Where-Object Outcome -in 'Failed','EvaluationFailed','VerificationFailed'
-        $result.RebootRequired
-        Get-EFPendingReboot
-
-    EndpointForge never restarts the device. After resolving the owner policy or
-    completing an approved restart, run Get-EFComplianceReport again.
+    If a remote computer cannot be reached, confirm its name, network path, remoting
+    policy, connecting-account permission, and installed EndpointForge version. The fleet
+    command will not change those prerequisites.
 
     If the module installs but does not import, inspect the discovered version and
     effective execution policy:
 
-        Get-Module -ListAvailable EndpointForge | Select-Object Name,Version,ModuleBase
+        Get-Module -ListAvailable EndpointForge |
+            Select-Object Name,Version,ModuleBase
         Get-ExecutionPolicy -List
         Import-Module EndpointForge -Verbose
 
-    Follow organizational application-control and execution-policy requirements. Do not
-    bypass a centrally managed policy. Reinstalling a module does not override Group
-    Policy.
-
-BASELINES
-    EnterpriseRecommended is included. Get-EFBaseline loads built-in or custom JSON.
-    Test-EFBaseline validates by built-in name, JSON path, or pipeline InputObject without
-    evaluating the endpoint.
-
-    New-EFBaseline creates a valid starting file. Template accepts Starter,
-    EnterpriseRecommended, or AuditOnly. The command supports WhatIf and will not replace
-    an existing file unless Force is specified. For example:
-
-        New-EFBaseline -Name Contoso.Workstation -Template Starter `
-            -Path .\Contoso.Workstation.json
-        Test-EFBaseline -Path .\Contoso.Workstation.json
-
-    Validate after every edit and before deployment. Custom baselines can define
-    Registry, Service, FirewallProfile, Defender, WindowsOptionalFeature, BitLocker,
-    SecureBoot, and Tpm controls.
-
 LOGGING
     File logging is disabled by default. Set-EFConfiguration can enable newline-delimited
-    JSON logging for the current process. Environment variables in LogPath are expanded
-    at write time.
+    JSON logging for the current PowerShell process:
+
+        Set-EFConfiguration `
+            -LogPath '%ProgramData%\EndpointForge\endpointforge.jsonl' `
+            -LogLevel Information
+
+    Protect log locations with least-privilege permissions. Logs and reports are separate;
+    reports are written only when Export-EFEndpointReport or a menu save action is used.
 
 SEE ALSO
     Show-EFMenu
+    Get-EFEndpointReadiness
     Get-EFEndpointSummary
     Show-EFEndpointSummary
+    Compare-EFEndpointSummary
+    Get-EFFleetSummary
     Get-EFEndpointInventory
     Get-EFEndpointHealth
+    Get-EFInstalledSoftware
+    Get-EFPendingReboot
     Get-EFBaseline
     New-EFBaseline
     Test-EFBaseline
@@ -225,3 +501,5 @@ SEE ALSO
     Get-EFRemediationPlan
     Invoke-EFEndpointRemediation
     Export-EFEndpointReport
+    Get-EFConfiguration
+    Set-EFConfiguration

@@ -1,24 +1,25 @@
 function Get-EFRemediationPlan {
     <#
     .SYNOPSIS
-    Gets a read-only remediation plan for the local endpoint.
+    Gets a read-only plan for fixing supported Windows settings.
 
     .DESCRIPTION
-    Evaluates selected controls and separates automatic changes, manual actions,
-    blockers, compliant controls, and non-applicable controls. It never changes endpoint
-    state and should be reviewed before Invoke-EFEndpointRemediation.
+    Checks selected checklist items and separates changes EndpointForge can preview,
+    items that need a person, items that could not be checked, and items that already
+    match. It never changes Windows. EndpointForge calls checklist items controls in
+    script output so existing automation remains compatible.
 
     .PARAMETER Baseline
-    A built-in baseline name, JSON path, or validated baseline object.
+    The checklist to use: a built-in name, JSON path, or validated checklist object.
 
     .PARAMETER ControlId
-    Limits the plan to selected control identifiers.
+    Limits the plan to selected checklist item IDs.
 
     .PARAMETER IncludeCompliant
     Includes compliant and non-applicable steps in the Steps collection.
 
     .PARAMETER NoProgress
-    Suppresses the compliance progress display.
+    Hides the checklist-check progress display.
 
     .EXAMPLE
     Get-EFRemediationPlan
@@ -88,6 +89,25 @@ function Get-EFRemediationPlan {
                 RequiresReboot    = $requiresReboot
                 Message           = [string]$result.Message
                 RecommendedAction = [string]$result.RecommendedAction
+                CanFixAutomatically = $action -eq 'Automatic'
+                WhyItMatters      = [string](Get-EFPropertyValue -InputObject $control -Name 'WhyItMatters' -Default (
+                    Get-EFPropertyValue -InputObject $result -Name 'WhyItMatters' -Default ''
+                ))
+                HowChecked        = [string](Get-EFPropertyValue -InputObject $control -Name 'HowChecked' -Default (
+                    Get-EFPropertyValue -InputObject $result -Name 'HowChecked' -Default ''
+                ))
+                WhatWouldChange   = [string](Get-EFPropertyValue -InputObject $control -Name 'WhatWouldChange' -Default (
+                    Get-EFPropertyValue -InputObject $result -Name 'WhatWouldChange' -Default ''
+                ))
+                ManualAction      = [string](Get-EFPropertyValue -InputObject $control -Name 'ManualAction' -Default (
+                    Get-EFPropertyValue -InputObject $result -Name 'ManualAction' -Default $result.RecommendedAction
+                ))
+                SafetyNotes       = [string](Get-EFPropertyValue -InputObject $control -Name 'SafetyNotes' -Default (
+                    Get-EFPropertyValue -InputObject $result -Name 'SafetyNotes' -Default ''
+                ))
+                RecoveryGuidance  = [string](Get-EFPropertyValue -InputObject $control -Name 'RecoveryGuidance' -Default (
+                    Get-EFPropertyValue -InputObject $result -Name 'RecoveryGuidance' -Default ''
+                ))
                 CommandPreview    = $commandPreview
             }
         }
@@ -106,22 +126,22 @@ function Get-EFRemediationPlan {
         @($allSteps | Where-Object Action -notin @('NoAction', 'NotApplicable'))
     }
     $summary = if ($blockedCount -gt 0) {
-        "$candidateCount remediation candidate(s); $blockedCount control(s) are blocked by evaluation errors."
+        "$candidateCount item(s) need attention; $blockedCount could not be checked. No settings were changed."
     }
     elseif ($candidateCount -gt 0) {
-        "$automaticCount automatic change(s) and $manualCount manual action(s) are recommended."
+        "EndpointForge can preview $automaticCount supported fix(es); $manualCount item(s) need a person to review them."
     }
     else {
-        'No remediation candidates were found.'
+        'Every checked item already matches, is not used on this computer, or needs no supported fix.'
     }
     $nextStep = if ($blockedCount -gt 0) {
-        'Resolve blocked evaluations, often by running elevated, then generate the plan again.'
+        'Review the items that could not be checked. If they need administrator permission, reopen PowerShell as Administrator and check again.'
     }
     elseif ($automaticCount -gt 0) {
-        'Preview automatic changes with Invoke-EFEndpointRemediation -WhatIf.'
+        'Preview the supported fixes. The preview shows what would change without changing Windows.'
     }
     elseif ($manualCount -gt 0) {
-        'Review manual actions and apply them through your approved enterprise process.'
+        'Review the manual guidance and follow your organization''s approved process.'
     }
     else {
         'No action is required.'
@@ -146,6 +166,7 @@ function Get-EFRemediationPlan {
         ExitCode           = if ($blockedCount -gt 0) { 3 } elseif ($candidateCount -gt 0) { 2 } else { 0 }
         Summary            = $summary
         NextStep           = $nextStep
+        AutomationHint     = if ($automaticCount -gt 0) { 'Invoke-EFEndpointRemediation -ControlId <approved item IDs> -WhatIf' } else { $null }
         Steps              = @($planSteps)
         Compliance         = $compliance
     }

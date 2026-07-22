@@ -83,6 +83,12 @@
         "Id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
         "Title": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "Description": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "WhyItMatters": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "HowChecked": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "WhatWouldChange": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "ManualAction": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "SafetyNotes": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "RecoveryGuidance": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "Type": {
           "enum": ["Registry", "Service", "FirewallProfile", "Defender", "WindowsOptionalFeature", "BitLocker", "SecureBoot", "Tpm"]
         },

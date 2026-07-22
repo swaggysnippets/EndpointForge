@@ -7,12 +7,12 @@
       <TableControl>
         <TableHeaders>
           <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Baseline</Label><Width>25</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checklist</Label><Width>25</Width></TableColumnHeader>
           <TableColumnHeader><Label>Status</Label><Width>14</Width></TableColumnHeader>
           <TableColumnHeader><Label>Score</Label><Width>7</Width></TableColumnHeader>
           <TableColumnHeader><Label>Failed</Label><Width>7</Width></TableColumnHeader>
           <TableColumnHeader><Label>Errors</Label><Width>7</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Exit</Label><Width>6</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Script result</Label><Width>13</Width></TableColumnHeader>
         </TableHeaders>
         <TableRowEntries><TableRowEntry><TableColumnItems>
           <TableColumnItem><PropertyName>ComputerName</PropertyName></TableColumnItem>
@@ -30,7 +30,7 @@
       <ViewSelectedBy><TypeName>EndpointForge.ControlResult</TypeName></ViewSelectedBy>
       <TableControl>
         <TableHeaders>
-          <TableColumnHeader><Label>Control</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Item</Label><Width>24</Width></TableColumnHeader>
           <TableColumnHeader><Label>Severity</Label><Width>10</Width></TableColumnHeader>
           <TableColumnHeader><Label>Status</Label><Width>15</Width></TableColumnHeader>
           <TableColumnHeader><Label>Message</Label></TableColumnHeader>
@@ -53,7 +53,7 @@
           <TableColumnHeader><Label>Score</Label><Width>8</Width></TableColumnHeader>
           <TableColumnHeader><Label>Critical</Label><Width>10</Width></TableColumnHeader>
           <TableColumnHeader><Label>Warnings</Label><Width>10</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Data</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Completeness</Label><Width>13</Width></TableColumnHeader>
           <TableColumnHeader><Label>Checked (UTC)</Label></TableColumnHeader>
         </TableHeaders>
         <TableRowEntries><TableRowEntry><TableColumnItems>
@@ -109,7 +109,7 @@
       <TableControl>
         <TableHeaders>
           <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Baseline</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checklist</Label><Width>24</Width></TableColumnHeader>
           <TableColumnHeader><Label>Success</Label><Width>9</Width></TableColumnHeader>
           <TableColumnHeader><Label>Changed</Label><Width>9</Width></TableColumnHeader>
           <TableColumnHeader><Label>Remaining</Label><Width>11</Width></TableColumnHeader>
@@ -135,12 +135,12 @@
           <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
           <TableColumnHeader><Label>Overall</Label><Width>12</Width></TableColumnHeader>
           <TableColumnHeader><Label>Health</Label><Width>10</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Compliance</Label><Width>14</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Data</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checklist</Label><Width>14</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Completeness</Label><Width>13</Width></TableColumnHeader>
           <TableColumnHeader><Label>Score</Label><Width>7</Width></TableColumnHeader>
           <TableColumnHeader><Label>Issues</Label><Width>8</Width></TableColumnHeader>
           <TableColumnHeader><Label>Reboot</Label><Width>8</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Exit</Label><Width>6</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Script result</Label><Width>13</Width></TableColumnHeader>
         </TableHeaders>
         <TableRowEntries><TableRowEntry><TableColumnItems>
           <TableColumnItem><PropertyName>ComputerName</PropertyName></TableColumnItem>
@@ -183,9 +183,9 @@
       <TableControl>
         <TableHeaders>
           <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Baseline</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checklist</Label><Width>24</Width></TableColumnHeader>
           <TableColumnHeader><Label>Ready</Label><Width>7</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Automatic</Label><Width>11</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Can fix</Label><Width>11</Width></TableColumnHeader>
           <TableColumnHeader><Label>Manual</Label><Width>8</Width></TableColumnHeader>
           <TableColumnHeader><Label>Blocked</Label><Width>9</Width></TableColumnHeader>
           <TableColumnHeader><Label>Reboot</Label><Width>8</Width></TableColumnHeader>
@@ -206,11 +206,11 @@
       <ViewSelectedBy><TypeName>EndpointForge.RemediationPlanStep</TypeName></ViewSelectedBy>
       <TableControl>
         <TableHeaders>
-          <TableColumnHeader><Label>Control</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Item</Label><Width>24</Width></TableColumnHeader>
           <TableColumnHeader><Label>Severity</Label><Width>10</Width></TableColumnHeader>
           <TableColumnHeader><Label>Status</Label><Width>15</Width></TableColumnHeader>
           <TableColumnHeader><Label>Action</Label><Width>14</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Elevated</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Admin needed</Label><Width>12</Width></TableColumnHeader>
           <TableColumnHeader><Label>Reboot</Label><Width>8</Width></TableColumnHeader>
           <TableColumnHeader><Label>Title</Label></TableColumnHeader>
         </TableHeaders>
@@ -232,8 +232,8 @@
         <TableHeaders>
           <TableColumnHeader><Label>Name</Label><Width>28</Width></TableColumnHeader>
           <TableColumnHeader><Label>Version</Label><Width>12</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Controls</Label><Width>10</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Remediable</Label><Width>12</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Items</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Can fix</Label><Width>12</Width></TableColumnHeader>
           <TableColumnHeader><Label>Description</Label></TableColumnHeader>
         </TableHeaders>
         <TableRowEntries><TableRowEntry><TableColumnItems>
@@ -253,7 +253,7 @@
           <TableColumnHeader><Label>Valid</Label><Width>7</Width></TableColumnHeader>
           <TableColumnHeader><Label>Name</Label><Width>28</Width></TableColumnHeader>
           <TableColumnHeader><Label>Version</Label><Width>12</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Controls</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Items</Label><Width>10</Width></TableColumnHeader>
           <TableColumnHeader><Label>Errors</Label><Width>8</Width></TableColumnHeader>
           <TableColumnHeader><Label>Warnings</Label><Width>10</Width></TableColumnHeader>
           <TableColumnHeader><Label>Input</Label></TableColumnHeader>
@@ -277,7 +277,7 @@
           <TableColumnHeader><Label>Name</Label><Width>28</Width></TableColumnHeader>
           <TableColumnHeader><Label>Version</Label><Width>12</Width></TableColumnHeader>
           <TableColumnHeader><Label>Template</Label><Width>24</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Controls</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Items</Label><Width>10</Width></TableColumnHeader>
           <TableColumnHeader><Label>Path</Label></TableColumnHeader>
         </TableHeaders>
         <TableRowEntries><TableRowEntry><TableColumnItems>
@@ -312,7 +312,7 @@
       <ViewSelectedBy><TypeName>EndpointForge.RemediationResult</TypeName></ViewSelectedBy>
       <TableControl>
         <TableHeaders>
-          <TableColumnHeader><Label>Control</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Item</Label><Width>24</Width></TableColumnHeader>
           <TableColumnHeader><Label>Before</Label><Width>15</Width></TableColumnHeader>
           <TableColumnHeader><Label>Outcome</Label><Width>20</Width></TableColumnHeader>
           <TableColumnHeader><Label>After</Label><Width>15</Width></TableColumnHeader>
@@ -328,15 +328,117 @@
       </TableControl>
     </View>
     <View>
+      <Name>EndpointForge.EndpointReadiness</Name>
+      <ViewSelectedBy><TypeName>EndpointForge.EndpointReadiness</TypeName></ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checklist</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Status</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Can check</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Complete</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Items</Label><Width>7</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Can fix</Label><Width>8</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Next step</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries><TableRowEntry><TableColumnItems>
+          <TableColumnItem><PropertyName>ComputerName</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>ChecklistName</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Status</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>AssessmentReady</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>CompleteCheckLikely</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>ControlCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>FixNowCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>NextStep</PropertyName></TableColumnItem>
+        </TableColumnItems></TableRowEntry></TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
+      <Name>EndpointForge.EndpointComparison</Name>
+      <ViewSelectedBy><TypeName>EndpointForge.EndpointComparison</TypeName></ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Score before</Label><Width>12</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Score now</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Change</Label><Width>8</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Improved</Label><Width>9</Width></TableColumnHeader>
+          <TableColumnHeader><Label>New issues</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Could not check</Label><Width>15</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Summary</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries><TableRowEntry><TableColumnItems>
+          <TableColumnItem><PropertyName>AfterComputerName</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>BeforeScore</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>AfterScore</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>ScoreChange</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>ImprovedCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>NewIssueCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>CouldNotCheckCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Summary</PropertyName></TableColumnItem>
+        </TableColumnItems></TableRowEntry></TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
+      <Name>EndpointForge.FleetSummary</Name>
+      <ViewSelectedBy><TypeName>EndpointForge.FleetSummary</TypeName></ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Checklist</Label><Width>22</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Computers</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checked</Label><Width>9</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Failed</Label><Width>7</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Healthy</Label><Width>8</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Warnings</Label><Width>9</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Critical</Label><Width>8</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Incomplete</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Script result</Label><Width>13</Width></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries><TableRowEntry><TableColumnItems>
+          <TableColumnItem><PropertyName>ChecklistName</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>TargetCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>SucceededCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>FailedCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>HealthyCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>WarningCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>CriticalCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>IncompleteCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>ExitCode</PropertyName></TableColumnItem>
+        </TableColumnItems></TableRowEntry></TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
+      <Name>EndpointForge.FleetComputerResult</Name>
+      <ViewSelectedBy><TypeName>EndpointForge.FleetComputerResult</TypeName></ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Computer</Label><Width>20</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Status</Label><Width>12</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Score</Label><Width>7</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Issues</Label><Width>8</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Could not check</Label><Width>15</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Next step</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries><TableRowEntry><TableColumnItems>
+          <TableColumnItem><PropertyName>ComputerName</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>OverallStatus</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Score</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>IssueCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>UnknownCount</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>NextStep</PropertyName></TableColumnItem>
+        </TableColumnItems></TableRowEntry></TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
       <Name>EndpointForge.MenuSession</Name>
       <ViewSelectedBy><TypeName>EndpointForge.MenuSession</TypeName></ViewSelectedBy>
       <TableControl>
         <TableHeaders>
           <TableColumnHeader><Label>Computer</Label><Width>18</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Baseline</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Checklist</Label><Width>24</Width></TableColumnHeader>
           <TableColumnHeader><Label>Actions</Label><Width>9</Width></TableColumnHeader>
           <TableColumnHeader><Label>Errors</Label><Width>8</Width></TableColumnHeader>
-          <TableColumnHeader><Label>Exit</Label><Width>14</Width></TableColumnHeader>
+          <TableColumnHeader><Label>How closed</Label><Width>14</Width></TableColumnHeader>
           <TableColumnHeader><Label>Last export</Label></TableColumnHeader>
         </TableHeaders>
         <TableRowEntries><TableRowEntry><TableColumnItems>

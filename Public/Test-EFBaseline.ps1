@@ -1,21 +1,22 @@
 function Test-EFBaseline {
     <#
     .SYNOPSIS
-    Tests whether an EndpointForge baseline is valid.
+    Checks whether an EndpointForge settings checklist file is valid.
 
     .DESCRIPTION
-    Validates baseline structure, control identifiers, value types, remediation safety,
-    and type-specific requirements without evaluating or changing the endpoint. Returns
-    a Boolean by default. PassThru returns a detailed validation result.
+    A checklist is a list of Windows settings and expected values; scripts call it a
+    baseline. This command checks the file structure, item IDs, value types, supported-fix
+    safety, and type-specific requirements. It does not read or change Windows settings.
+    It returns True or False by default. PassThru returns detailed validation results.
 
     .PARAMETER Name
-    The name of a built-in baseline.
+    The name of a built-in checklist.
 
     .PARAMETER Path
-    The path to a custom baseline JSON file.
+    The path to a custom checklist JSON file.
 
     .PARAMETER InputObject
-    An in-memory baseline object, typically received from the pipeline.
+    An in-memory checklist object, usually returned by Get-EFBaseline.
 
     .PARAMETER PassThru
     Returns an EndpointForge.BaselineValidation object instead of a Boolean.

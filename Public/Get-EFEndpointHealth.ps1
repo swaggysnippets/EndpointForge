@@ -145,7 +145,7 @@ function Get-EFEndpointHealth {
         'Critical' { "$criticalCount critical issue(s) and $warningCount warning(s) require attention." }
     }
     $nextStep = if ($status -eq 'Healthy') {
-        'Run Get-EFEndpointSummary for a combined health and compliance view.'
+        'Run Get-EFEndpointSummary for one plain-language health and Windows settings checkup.'
     }
     else {
         'Review the Checks property or run Show-EFEndpointSummary -Detailed.'

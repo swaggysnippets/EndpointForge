@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions should preserve EndpointForge's automation contracts: Windows PowerShell 5.1 compatibility, structured output, idempotent evaluation, no automatic restarts, no remote code download, and `SupportsShouldProcess` for state changes.
+Contributions should preserve EndpointForge's automation contracts: Windows PowerShell 5.1 compatibility, structured output, beginner-readable presentation, idempotent evaluation, no automatic restarts, no remote code download, and `SupportsShouldProcess` for state changes.
 
 ## Development
 
@@ -14,6 +14,8 @@ Contributions should preserve EndpointForge's automation contracts: Windows Powe
 6. Do not edit files beneath `artifacts` by hand; rebuild to regenerate the package and its
    SHA-256 inventory.
 7. Update `CHANGELOG.md` for user-visible changes.
+8. Read new menu and help text as if the user has never heard the terms baseline,
+   compliance, remediation, DSC, or `WhatIf`; define technical names before using them.
 
 Public commands use approved PowerShell verbs and the `EF` noun prefix. Private helpers stay in `Private`; exported commands stay in `Public`. Do not add required runtime dependencies without documenting the operational and supply-chain impact.
 
@@ -25,7 +27,13 @@ New remediating control types require:
 - an idempotent remediator;
 - a post-change verification path;
 - explicit `-WhatIf` coverage;
-- a documented rollback or a clear reason the control is not automatically remediated.
+- a tested before-and-after receipt and recovery guidance;
+- automatic rollback only when it is provably safe across local policy and management
+  ownership, otherwise an explicit explanation that rollback is not automatic.
+
+Remote or fleet features must remain read-only unless a separate, explicitly scoped design
+is approved. They must not install EndpointForge, enable WinRM, change TrustedHosts, or
+retain credentials as a convenience side effect.
 
 ## Release checklist
 
