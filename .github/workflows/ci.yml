@@ -24,7 +24,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install pinned quality tools
@@ -45,8 +45,8 @@ jobs:
           $env:PSModulePath = "$toolRoot;$env:PSModulePath"
           "PSModulePath=$env:PSModulePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $pester = Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1
-          $analyzer = Get-Module -ListAvailable PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1
+          $pester = Test-ModuleManifest (Join-Path $toolRoot "Pester\$env:PESTER_VERSION\Pester.psd1") -ErrorAction Stop
+          $analyzer = Test-ModuleManifest (Join-Path $toolRoot "PSScriptAnalyzer\$env:PSSCRIPTANALYZER_VERSION\PSScriptAnalyzer.psd1") -ErrorAction Stop
           if ($pester.Version -ne [version]$env:PESTER_VERSION -or
               $analyzer.Version -ne [version]$env:PSSCRIPTANALYZER_VERSION) {
             throw 'The resolved quality-tool versions do not match the pinned versions.'
@@ -61,7 +61,7 @@ jobs:
           .\build\Invoke-PesterTests.ps1 -TestResultPath .\TestResults\pester-5.1.xml
       - name: Upload Pester results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pester-windows-powershell
           path: TestResults/*.xml
@@ -73,7 +73,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install pinned quality tools
@@ -91,8 +91,8 @@ jobs:
           $env:PSModulePath = "$toolRoot;$env:PSModulePath"
           "PSModulePath=$env:PSModulePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $pester = Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1
-          $analyzer = Get-Module -ListAvailable PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1
+          $pester = Test-ModuleManifest (Join-Path $toolRoot "Pester\$env:PESTER_VERSION\Pester.psd1") -ErrorAction Stop
+          $analyzer = Test-ModuleManifest (Join-Path $toolRoot "PSScriptAnalyzer\$env:PSSCRIPTANALYZER_VERSION\PSScriptAnalyzer.psd1") -ErrorAction Stop
           if ($pester.Version -ne [version]$env:PESTER_VERSION -or
               $analyzer.Version -ne [version]$env:PSSCRIPTANALYZER_VERSION) {
             throw 'The resolved quality-tool versions do not match the pinned versions.'
@@ -107,7 +107,7 @@ jobs:
           .\build\Invoke-PesterTests.ps1 -TestResultPath .\TestResults\pester-7.xml
       - name: Upload Pester results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pester-powershell-7
           path: TestResults/*.xml
@@ -120,7 +120,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Build staged module
@@ -132,7 +132,7 @@ jobs:
           .\build\Test-StagedModule.ps1 -ModulePath .\artifacts\EndpointForge
           .\build\Test-PublishReadiness.ps1 -ModulePath .\artifacts\EndpointForge
       - name: Upload verified module
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: EndpointForge-module
           path: artifacts/

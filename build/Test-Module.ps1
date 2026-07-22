@@ -33,7 +33,19 @@ catch {
     $failures.Add("Manifest validation failed: $($_.Exception.Message)")
 }
 
-$analyzer = Get-Module -ListAvailable PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1
+$availableAnalyzers = @(Get-Module -ListAvailable PSScriptAnalyzer)
+$requiredAnalyzerVersion = $null
+if (-not [string]::IsNullOrWhiteSpace($env:PSSCRIPTANALYZER_VERSION)) {
+    $requiredAnalyzerVersion = [version]$env:PSSCRIPTANALYZER_VERSION
+    $analyzer = $availableAnalyzers |
+        Where-Object Version -eq $requiredAnalyzerVersion |
+        Select-Object -First 1
+}
+else {
+    $analyzer = $availableAnalyzers |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+}
 if ($null -ne $analyzer) {
     Write-Output "Running PSScriptAnalyzer $($analyzer.Version)..."
     Import-Module $analyzer.Path -Force
@@ -47,7 +59,12 @@ if ($null -ne $analyzer) {
     }
 }
 elseif ($RequireScriptAnalyzer) {
-    $failures.Add('PSScriptAnalyzer is required but is not installed.')
+    if ($null -ne $requiredAnalyzerVersion) {
+        $failures.Add("PSScriptAnalyzer $requiredAnalyzerVersion is required but is not installed.")
+    }
+    else {
+        $failures.Add('PSScriptAnalyzer is required but is not installed.')
+    }
 }
 else {
     Write-Warning 'PSScriptAnalyzer is not installed; static analysis was skipped.'
