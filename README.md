@@ -1,518 +1,454 @@
 # EndpointForge
 
-EndpointForge is an enterprise-oriented PowerShell toolkit for Windows endpoint inventory, health checks, policy compliance, guarded remediation, and structured reporting. It is designed for local execution through Intune, Configuration Manager, RMM platforms, scheduled tasks, or PowerShell remoting.
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/EndpointForge?label=PowerShell%20Gallery)](https://www.powershellgallery.com/packages/EndpointForge)
+[![CI](https://github.com/swaggysnippets/EndpointForge/actions/workflows/ci.yml/badge.svg)](https://github.com/swaggysnippets/EndpointForge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-The module favors predictable automation over hidden behavior:
+EndpointForge helps you check and maintain Windows computers without requiring you to
+understand configuration frameworks. It answers four practical questions:
 
-- read-only collection commands do not require elevation;
-- state-changing commands support `-WhatIf` and `-Confirm`;
-- remediation is limited to declared, validated control types;
-- every compliance and health report includes a deterministic `ExitCode` property;
-- logs are newline-delimited JSON for ingestion by enterprise tooling;
-- unsupported Windows features report `NotApplicable` instead of ending the full run;
-- installed software is read from uninstall registry keys—`Win32_Product` is never queried.
+- Does this computer look healthy?
+- Do important Windows settings match the selected checklist?
+- Which problems can EndpointForge safely preview and fix?
+- What changed between an earlier check and a later one?
 
-## Start here: your first endpoint check in 60 seconds
+The guided menu uses everyday language, clearly labels every choice that can change a
+setting, and works in Windows PowerShell 5.1 or PowerShell 7 on Windows.
 
-Run one installation command in a normal PowerShell window. `CurrentUser` avoids an
-administrator prompt and is sufficient for read-only checks:
+## Start here
+
+Install the current release from the PowerShell Gallery:
 
 ```powershell
-# PowerShell 7+ with Microsoft.PowerShell.PSResourceGet
-Install-PSResource -Name EndpointForge -Scope CurrentUser
-
-# OR Windows PowerShell 5.1 with PowerShellGet
-Install-Module -Name EndpointForge -Scope CurrentUser
+Install-Module EndpointForge -Scope CurrentUser
 ```
 
-Import the module and open the guided operator menu:
+Open the guided menu:
 
 ```powershell
-Import-Module EndpointForge
 Show-EFMenu
 ```
 
-The menu puts the safe path first: assess, review findings, build a plan, preview selected
-controls, and only then offer a guarded apply action. Assessment, findings, planning, and
-preview are read-only. Apply requires Administrator access, a fresh `WhatIf` preview,
-specific control selection, and typing `APPLY` exactly. EndpointForge never restarts the
-device.
+The first screen is organized around what you want to accomplish:
 
-Prefer direct commands in scripts and unattended management systems:
+```text
+EndpointForge - Windows computer helper
+Checks health and security, explains problems, and safely previews supported fixes.
 
-```powershell
-$summary = Get-EFEndpointSummary -NoProgress
-$summary | Show-EFEndpointSummary
+1. Check this computer now              [does not change Windows]
+2. Understand the latest results        [does not change Windows]
+3. Fix selected problems safely         [can change settings after approval]
+4. Save reports or compare checks       [creates files only when you choose Save]
+5. Check other computers                [read-only; advanced setup required]
+6. Change what EndpointForge checks     [does not change Windows]
+A. Tools for IT scripts and troubleshooting
+H. Help - explain every choice
+Q. Exit EndpointForge
 ```
 
-`Get-EFEndpointSummary` returns a normal PowerShell object for pipelines and automation.
-`Show-EFEndpointSummary` is the human-readable terminal view; add `-Detailed` for control
-details, `-NoColor` for plain-text logs, or `-PassThru` to keep the summary in the pipeline.
-`Show-EFMenu` is an interactive facade and should not be used in unattended jobs.
+You can run normal checks as a standard user. Some protected details and all approved
+fixes require a PowerShell window opened with **Run as administrator**.
 
-## Guided console menu
+## What EndpointForge can do
 
-```powershell
-# Use a custom baseline and include installed software in menu assessments
-Show-EFMenu -Baseline .\Contoso.Workstation.json -IncludeSoftware
+- Run one read-only computer check that combines health, restart status, security
+  information, and a Windows settings checklist.
+- Explain results as **Looks good**, **Needs attention**, **Urgent attention**, or
+  **Could not check everything**.
+- Explain why each built-in checklist item matters, how it is checked, what a supported
+  fix would change, restart impact, and recovery guidance.
+- Preview supported fixes without changing Windows.
+- Apply only the items you explicitly select, after a fresh preview and an exact `APPLY`
+  confirmation in an Administrator window.
+- Record before and after values for approved changes.
+- Save a self-contained HTML report for people or JSON, CSV, and CLIXML for scripts.
+- Compare two checks without claiming an incomplete later result was fixed.
+- Check several already-managed computers through PowerShell remoting without changing
+  them.
+- Validate and create organization-specific checklist JSON files.
 
-# Plain output, quiet progress, and a session object after quitting
-$menuSession = Show-EFMenu -NoColor -NoProgress -PassThru
-```
+## Safety boundaries
 
-The linear menu works in Windows PowerShell 5.1, PowerShell 7, Windows Terminal, VS Code,
-Server Core, and PowerShell remoting. It uses numbered `Read-Host` prompts instead of
-arrow keys, cursor control, WPF, or `Out-GridView`. `-NoPause` removes only the
-Press Enter pauses between actions; it never skips control selection or the `APPLY`
-safety acknowledgement. Set the standard `NO_COLOR` environment variable or use
-`-NoColor` for color-free output.
+EndpointForge intentionally does **not**:
 
-By default, menu export writes a timestamped JSON session report beneath
-`Documents\EndpointForge Reports`. The directory is not created until export is chosen.
-Use `-ReportDirectory` to select an enterprise-approved location.
+- restart Windows;
+- install updates;
+- turn on BitLocker or start drive encryption;
+- change Secure Boot, firmware, or Trusted Platform Module settings;
+- install itself on another computer or enable PowerShell remoting;
+- bypass Group Policy, mobile-device management, Defender tamper protection, or another
+  security product;
+- in the guided menu, make an automatic change without item selection, a fresh preview,
+  Administrator permission, and the exact `APPLY` acknowledgement;
+- promise automatic rollback.
 
-## Requirements
+The module records before and after values, but a universal rollback would be unsafe.
+Organization policy, later Windows changes, service dependencies, firewall rules, and
+other management tools can all affect the setting after EndpointForge runs. Use the
+receipt and its recovery guidance with your approved change process.
 
-- Windows 10, Windows 11, or Windows Server 2016 and later
-- Windows PowerShell 5.1 or PowerShell 7+
-- An elevated session for remediation and for complete BitLocker, TPM, Secure Boot, and optional-feature posture data
+## Everyday glossary
 
-Most inventory and health data is available to standard users. Windows protects some read-only security APIs behind administrator privileges; those capabilities are returned as collection notes or evaluation errors rather than silently omitted. The module imports on non-Windows systems for packaging and command discovery, but endpoint commands require Windows.
+| Term | Plain-language meaning |
+|---|---|
+| Computer checkup | A read-only look at health and important Windows settings. |
+| Checklist | A list of Windows settings and their expected values. Selecting one does not apply it. |
+| Baseline | The script-facing name for a checklist. Existing commands keep this name for compatibility. |
+| Checklist item | One setting in a checklist. Script output calls it a control. |
+| Matches | The current value could be read and equals the checklist value. Script output calls this compliant. |
+| Does not match | The current value was read and differs from the checklist. Script output calls this noncompliant. |
+| Could not check | Windows did not provide a definite answer. This is not treated as passing or fixed. |
+| Preview | A no-change rehearsal that shows the selected supported fixes. PowerShell calls this `WhatIf`. |
+| Supported fix | A narrow setting change EndpointForge knows how to preview and verify. Script output calls it automatic remediation. |
+| Manual review | EndpointForge explains the issue but deliberately does not change it. |
+| Administrator | A PowerShell window opened with **Run as administrator**. This is also called an elevated session. |
+| Endpoint | An IT term for a managed computer. |
 
-## Installation and verification
+You do not need to know DSC, compliance systems, or PowerShell object models to use the
+menu.
 
-For a shared machine-wide installation, open PowerShell as Administrator and use
-`-Scope AllUsers`. For normal interactive use, prefer `-Scope CurrentUser` as shown
-above. Verify the installation before the first run:
+## Run a check without the menu
 
-```powershell
-Get-Module -ListAvailable EndpointForge | Select-Object Name, Version, ModuleBase
-Import-Module EndpointForge
-Get-Command -Module EndpointForge
-```
-
-For local development, clone the repository and import the manifest:
-
-```powershell
-Import-Module .\EndpointForge.psd1 -Force
-```
-
-## Object-first quick start
-
-```powershell
-# One structured result for operators and automation
-$summary = Get-EFEndpointSummary -MinimumFreeSpacePercent 15 -MaximumUptimeDays 30
-$summary | Show-EFEndpointSummary -Detailed
-$summary | Export-EFEndpointReport -Path C:\ProgramData\EndpointForge\summary.json -Force
-
-# Focused collection commands remain available
-$inventory = Get-EFEndpointInventory
-$health = Get-EFEndpointHealth
-$compliance = Get-EFComplianceReport
-$compliance.Results | Where-Object Status -ne 'Compliant'
-
-# Plan and preview before rollout; neither command changes state
-$plan = Get-EFRemediationPlan
-$plan
-Invoke-EFEndpointRemediation -WhatIf
-
-# Apply supported changes from an elevated session and keep confirmation enabled
-$remediation = Invoke-EFEndpointRemediation
-
-# Verify independently after the change (Boolean, suitable for if statements)
-Test-EFEndpointCompliance
-```
-
-## Commands
-
-| Command | Purpose | Changes endpoint state |
-|---|---|---:|
-| `Show-EFMenu` | Guided interactive assessment, planning, preview, guarded apply, baseline, and export workflow | Only when the operator explicitly completes Apply; can also write reports or baselines |
-| `Get-EFEndpointSummary` | Combines identity, health, reboot, compliance, and collection quality into one automation-friendly result | No |
-| `Show-EFEndpointSummary` | Renders a concise or detailed operator view; supports plain text with `-NoColor` | No |
-| `Get-EFEndpointInventory` | Hardware, OS, disk, network, security, and optional software inventory | No |
-| `Get-EFInstalledSoftware` | Registry-based machine and user software inventory | No |
-| `Get-EFPendingReboot` | Servicing, update, rename, and file-operation restart indicators | No |
-| `Get-EFEndpointHealth` | Monitoring-friendly operational health with thresholds and exit code | No |
-| `Get-EFBaseline` | Lists or loads validated compliance baselines | No |
-| `New-EFBaseline` | Creates a starter, recommended, or audit-only baseline JSON file | Writes a baseline file |
-| `Test-EFBaseline` | Validates a built-in, file-based, or in-memory baseline before use | No |
-| `Test-EFEndpointCompliance` | Returns a Boolean compliance answer; use `-PassThru` for the report | No |
-| `Get-EFComplianceReport` | Returns the full compliance report, control results, score, and exit code | No |
-| `Get-EFRemediationPlan` | Explains applicable changes, elevation, and reboot impact before execution | No |
-| `Invoke-EFEndpointRemediation` | Applies supported controls with elevation and ShouldProcess guards | Yes |
-| `Export-EFEndpointReport` | Writes JSON, CSV, or CLIXML reports | Writes a report file |
-| `Get-EFConfiguration` | Reads current logging and retry configuration | No |
-| `Set-EFConfiguration` | Changes in-memory module configuration | Session only |
-
-All commands include comment-based help:
+The recommended read-only command is:
 
 ```powershell
-Get-Help Invoke-EFEndpointRemediation -Full
-Get-Help about_EndpointForge
+$check = Get-EFEndpointSummary -NoProgress
+$check | Show-EFEndpointSummary
 ```
 
-## Recommended operator workflow
-
-Use the same progression for an interactive repair, a pilot ring, or an automation
-wrapper: **observe → validate → plan → preview → apply → verify → export**.
-
-Interactive operators can run that entire progression with `Show-EFMenu`. The direct
-commands below are the equivalent object-first workflow for scripts, scheduled tasks,
-Intune, RMM tools, and other unattended hosts.
-
-### 1. Observe the endpoint
+For a complete explanation of every item:
 
 ```powershell
-$summary = Get-EFEndpointSummary -NoProgress
-$summary | Show-EFEndpointSummary -Detailed
+$check | Show-EFEndpointSummary -Detailed
 ```
 
-Omit `-NoProgress` at an interactive terminal. Use it in Intune, scheduled tasks, CI,
-or any host where progress records would add noise.
+The command returns structured data for scripts. The display is for people; do not parse
+the display text in automation.
 
-### 2. Select and validate the baseline
+Before a check, you can ask what the current PowerShell window is capable of doing:
 
 ```powershell
-$baseline = Get-EFBaseline -Name EnterpriseRecommended
-$baseline | Test-EFBaseline
+Get-EFEndpointReadiness
 ```
 
-Validation checks the baseline contract; it does not evaluate or change the endpoint.
+Readiness checks the platform, checklist, Administrator permission, remote-session
+context, and required Windows commands. It does not evaluate the settings themselves and
+does not change anything.
 
-### 3. Review the change plan
+## Understand results
+
+The overall result separates a known problem from missing evidence:
+
+| Display | Meaning | Script value |
+|---|---|---|
+| Looks good | Checked health and settings do not need attention. | `Healthy` / `Compliant` |
+| Needs attention | A warning or checklist difference was found. | `Warning` / `NonCompliant` |
+| Urgent attention | A critical health or security difference was found. | `Critical` |
+| Could not check everything | One or more answers were unavailable or protected. | `Incomplete`, `Unknown`, or `Error` |
+| Not used on this computer | The Windows feature is not present or applicable. | `NotApplicable` |
+
+Unknown information is never silently counted as healthy. A later incomplete result is
+also never described as an improvement.
+
+## Preview and apply supported fixes
+
+The safest experience is menu option 3. The guided sequence is fixed:
+
+1. Run or reuse a read-only computer check.
+2. Explain every item needing attention.
+3. Select only supported fixes.
+4. Run a mandatory preview that cannot change Windows.
+5. Stop if the preview is incomplete.
+6. Require an Administrator window.
+7. Show the computer, selected items, current values, expected values, and restart impact.
+8. Require `APPLY` exactly.
+9. Apply the selected items and immediately check their new values.
+10. Run a fresh computer check and show the before-and-after comparison.
+
+A standard-user window can complete the preview. It will then explain how to reopen
+PowerShell as Administrator; it does not try to restart or elevate itself.
+
+The equivalent script workflow is:
 
 ```powershell
-$plan = Get-EFRemediationPlan -Baseline $baseline -IncludeCompliant -NoProgress
-$plan
+$plan = Get-EFRemediationPlan -NoProgress
+$plan.Steps | Where-Object CanFixAutomatically
+
+# No-change preview
+Invoke-EFEndpointRemediation -ControlId 'EF-FW-DOMAIN' -WhatIf -NoProgress
+
+# Apply only after independent approval, from an Administrator window
+Invoke-EFEndpointRemediation -ControlId 'EF-FW-DOMAIN' -Confirm:$false -NoProgress
 ```
 
-The plan identifies compliant, noncompliant, non-remediable, and unavailable controls,
-and calls out elevation and restart requirements before any change is attempted. Omit
-`-IncludeCompliant` for a shorter action-focused plan. Use `-ControlId` to scope both the
-plan and the later remediation to approved controls.
+The low-level apply command supports normal PowerShell `ShouldProcess` behavior. In your
+own automation, you are responsible for approval, selection, and change control. The menu
+adds the extra exact-text acknowledgement.
 
-### 4. Preview, apply, and verify
+### Built-in supported fixes
+
+The built-in `EnterpriseRecommended` checklist can preview narrow changes for:
+
+- Domain, Private, and Public Windows Firewall profiles;
+- User Account Control;
+- Microsoft Defender real-time protection when Defender manages it;
+- the SMB 1.0 Windows optional feature;
+- the Windows Update service start setting.
+
+BitLocker, Secure Boot, and TPM readiness are report-only. EndpointForge will not change
+them automatically.
+
+## Save reports
+
+HTML is recommended when a person will read the result:
 
 ```powershell
-$approved = 'EF-FW-DOMAIN', 'EF-UAC-ENABLED'
-
-Invoke-EFEndpointRemediation -Baseline $baseline -ControlId $approved -WhatIf
-$result = Invoke-EFEndpointRemediation -Baseline $baseline -ControlId $approved
-$verification = Get-EFComplianceReport -Baseline $baseline -ControlId $approved
+Get-EFEndpointSummary -NoProgress |
+    Export-EFEndpointReport -Path .\computer-check.html
 ```
 
-Run the apply step in an elevated PowerShell session. Leave confirmation enabled for
-interactive work. In centrally approved, non-interactive automation, use
-`-Confirm:$false` only after validating the plan and `-WhatIf` output in a representative
-pilot ring.
+The HTML file is self-contained, uses embedded styling, loads no JavaScript, fonts, or
+internet content, and HTML-encodes report values. It is UTF-8 without a byte-order mark.
 
-### 5. Export evidence
+JSON preserves nested data for scripts and support tools:
 
 ```powershell
-$result | Export-EFEndpointReport `
-    -Path C:\ProgramData\EndpointForge\Reports\remediation.json `
-    -Force
-
-$verification | Export-EFEndpointReport `
-    -Path C:\ProgramData\EndpointForge\Reports\verification.json `
-    -Force
+Get-EFEndpointSummary -NoProgress |
+    Export-EFEndpointReport -Path .\computer-check.json
 ```
 
-The object returned by an EndpointForge command is the automation contract. The output
-from `Show-EFEndpointSummary` is for people and must not be parsed by scripts.
+CSV and CLIXML are also supported:
 
-## Built-in baseline
+```powershell
+Get-EFInstalledSoftware |
+    Export-EFEndpointReport -Path .\software.csv
 
-`EnterpriseRecommended` contains ten intentionally conservative controls:
+Get-EFEndpointSummary -NoProgress |
+    Export-EFEndpointReport -Path .\computer-check.clixml
+```
 
-- Domain, Private, and Public Windows Firewall profiles enabled
-- User Account Control enabled
-- Microsoft Defender real-time protection enabled when Defender is available
-- SMB 1.0 optional feature disabled when present
-- Windows Update service not disabled
-- BitLocker protection audited on the operating-system drive
-- Secure Boot audited on supported UEFI systems
-- TPM presence and readiness audited
+The extension selects the format. You may also use `-Format Html`, `Json`, `Csv`, or
+`Clixml`. Existing files require `-Force`, and export supports `-WhatIf`.
 
-BitLocker, Secure Boot, and TPM controls are audit-only. EndpointForge does not automatically enable encryption, change firmware settings, clear a TPM, reboot a device, install software, or download and execute remote content.
+Reports can contain computer names, hardware, installed software, security posture, and
+change evidence. Store them only in an approved location.
 
-### Custom baselines
+## Compare two checks
 
-Create a valid starting file instead of hand-writing the full contract. `Starter` creates a
-small editable example, `EnterpriseRecommended` copies the built-in baseline, and
-`AuditOnly` creates a non-remediating starting point:
+Compare two saved JSON reports:
+
+```powershell
+$difference = Compare-EFEndpointSummary -Before .\before.json -After .\after.json
+$difference
+```
+
+Or compare objects directly:
+
+```powershell
+$before = Get-EFEndpointSummary -NoProgress
+# An approved change or other maintenance occurs here.
+$after = Get-EFEndpointSummary -NoProgress
+Compare-EFEndpointSummary $before $after
+```
+
+The comparison reports improved items, new issues, unchanged items, information that is
+now available, and items that could not be checked. By default, it rejects checks from
+different computer names. It also warns when the checklist name or version changed, since
+that is not a like-for-like progress check.
+
+## Check several computers without changing them
+
+`Get-EFFleetSummary` is strictly read-only:
+
+```powershell
+$fleet = Get-EFFleetSummary -ComputerName PC-101,PC-102
+$fleet.Results
+$fleet.Failures
+```
+
+Before this works, each target computer must already:
+
+- allow PowerShell remoting under your organization's policy;
+- have EndpointForge 0.4.0 or later installed;
+- allow the connecting account to run the check.
+
+EndpointForge does not install the module remotely, enable WinRM, change TrustedHosts, or
+run fixes. Connection failures are returned alongside successful computer results.
+
+Use a credential only when your approved environment requires one:
+
+```powershell
+$credential = Get-Credential
+Get-EFFleetSummary -ComputerName (Get-Content .\computers.txt) -Credential $credential
+```
+
+The credential is not stored in the returned report.
+
+## Choose or create a checklist
+
+The built-in checklist is loaded by default:
+
+```powershell
+Get-EFBaseline -Name EnterpriseRecommended
+```
+
+View available built-in checklists:
+
+```powershell
+Get-EFBaseline -ListAvailable
+```
+
+Create an editable starter file:
 
 ```powershell
 New-EFBaseline `
-    -Name 'Contoso.Workstation' `
-    -Description 'Contoso workstation security policy' `
+    -Name Contoso.Workstation `
     -Template Starter `
-    -Path .\Contoso.Workstation.json
-
-Test-EFBaseline -Path .\Contoso.Workstation.json
-$baseline = Get-EFBaseline -Path .\Contoso.Workstation.json
-Get-EFRemediationPlan -Baseline $baseline
+    -Path .\checklists\Contoso.Workstation.json
 ```
 
-`New-EFBaseline` supports `-WhatIf` and will not replace an existing file unless `-Force`
-is specified. Validate after every edit and before every deployment. `Test-EFBaseline`
-also accepts a built-in name or an in-memory object through the pipeline.
-
-For a complete example, see
-[`examples/Contoso.Workstation.json`](examples/Contoso.Workstation.json). Editor tooling
-can use the included [`Data/Baseline.schema.json`](Data/Baseline.schema.json) for inline
-completion and validation.
-
-Supported control types are:
-
-| Type | Evaluated | Remediated |
-|---|---:|---:|
-| `Registry` | Yes | Yes |
-| `Service` | Yes | Yes |
-| `FirewallProfile` | Yes | Yes |
-| `Defender` | Yes | Real-time protection only |
-| `WindowsOptionalFeature` | Yes | Yes, without automatic restart |
-| `BitLocker` | Yes | No |
-| `SecureBoot` | Yes | No |
-| `Tpm` | Yes | No |
-
-A custom control must explicitly set `Remediable`. Baselines are rejected when they have missing names, versions, controls, duplicate control IDs, or unsupported types.
-
-## Automation contracts
-
-EndpointForge functions do not call `exit` from inside the module.
-`Test-EFEndpointCompliance` returns `$true` or `$false`, which makes it safe to use directly
-in an `if` statement. Use `Get-EFComplianceReport` (or
-`Test-EFEndpointCompliance -PassThru`) when an orchestrator needs control details, score,
-or `ExitCode`.
-
-### Compliance exit codes
-
-| Code | Meaning |
-|---:|---|
-| 0 | All applicable controls are compliant |
-| 2 | One or more controls are noncompliant |
-| 3 | One or more controls could not be evaluated |
-
-### Health exit codes
-
-| Code | Meaning |
-|---:|---|
-| 0 | Healthy |
-| 1 | Warning |
-| 2 | Critical |
-
-For an Intune proactive remediation pair, see [`examples/Intune`](examples/Intune). For a scheduled maintenance pattern, see [`examples/Invoke-EndpointMaintenance.ps1`](examples/Invoke-EndpointMaintenance.ps1). For read-only fleet collection over PowerShell remoting, see [`examples/Invoke-RemoteAssessment.ps1`](examples/Invoke-RemoteAssessment.ps1).
-
-## Structured logging
-
-File logging is off by default. Enable it for the current process:
+Validate it without checking or changing Windows:
 
 ```powershell
-Set-EFConfiguration `
-    -LogPath '%ProgramData%\EndpointForge\endpointforge.jsonl' `
-    -LogLevel Information
+Test-EFBaseline -Path .\checklists\Contoso.Workstation.json -PassThru
 ```
 
-Each line is an independent JSON document with UTC time, level, computer, process, correlation ID, message, and command-specific data. EndpointForge does not intentionally log uninstall strings, serial numbers, interactive usernames, or baseline registry contents. Report data is separate and exported only when requested.
+Use it for a read-only check:
 
-Reports can still contain host identity, hardware, network, software, security posture, and
-remediation evidence. Store reports, logs, and custom baselines in enterprise-approved
-locations with least-privilege ACLs and appropriate retention. For centrally managed runs,
-limit write access to the management identity, `SYSTEM`, and authorized administrators;
-verify inherited permissions with `Get-Acl`. See [`SECURITY.md`](SECURITY.md) for the full
-data-handling and privileged-import guidance.
+```powershell
+Get-EFEndpointSummary -Baseline .\checklists\Contoso.Workstation.json -NoProgress
+```
 
-## Troubleshooting first-run and capability messages
+Custom checklist files are privileged configuration input. Review them, store them in
+source control, and protect them from untrusted writes before an Administrator process
+uses them.
 
-EndpointForge distinguishes an endpoint that is out of policy from one it could not fully
-inspect:
+### Checklist item types
 
-| Result | Meaning | Operator action |
+EndpointForge 0.4.0 understands these types:
+
+- `Registry`
+- `Service`
+- `FirewallProfile`
+- `Defender`
+- `WindowsOptionalFeature`
+- `BitLocker` (report-only)
+- `SecureBoot` (report-only)
+- `Tpm` (report-only)
+
+Optional explanation fields are `WhyItMatters`, `HowChecked`, `WhatWouldChange`,
+`ManualAction`, `SafetyNotes`, and `RecoveryGuidance`. The included JSON schema documents
+the complete structure.
+
+## Commands for scripts
+
+All public commands return objects rather than presentation text unless their names begin
+with `Show`.
+
+| Command | Purpose | Changes Windows? |
 |---|---|---|
-| `NonCompliant` | The current value was read and does not match the baseline | Review `Get-EFRemediationPlan`, preview with `-WhatIf`, then remediate if approved |
-| `NotApplicable` | The feature, service, or Windows capability is absent or unsupported | Usually no action; confirm the baseline is appropriate for that device class |
-| `Error` | EndpointForge could not establish the current value | Read the result message, check elevation and platform capability, then rerun |
+| `Show-EFMenu` | Opens the goal-based guided experience. | Only through the guarded fix flow. |
+| `Get-EFEndpointReadiness` | Explains what the current window can check or fix. | No |
+| `Get-EFEndpointSummary` | Combines health, inventory, security, and checklist results. | No |
+| `Show-EFEndpointSummary` | Displays a summary in plain language. | No |
+| `Compare-EFEndpointSummary` | Compares earlier and later checks. | No |
+| `Get-EFFleetSummary` | Runs read-only checks on prepared remote computers. | No |
+| `Get-EFRemediationPlan` | Separates supported fixes, manual review, and unavailable checks. | No |
+| `Invoke-EFEndpointRemediation` | Previews or applies selected supported fixes. | Yes, unless `-WhatIf` |
+| `Export-EFEndpointReport` | Writes HTML, JSON, CSV, or CLIXML. | Writes a file |
+| `Get-EFBaseline` | Loads or lists checklists. | No |
+| `Test-EFBaseline` | Validates a checklist. | No |
+| `New-EFBaseline` | Creates a starter checklist and schema. | Writes files |
+| `Get-EFComplianceReport` | Returns detailed checklist results. | No |
+| `Test-EFEndpointCompliance` | Returns a simple Boolean or detailed checklist result. | No |
+| `Get-EFEndpointHealth` | Checks operational health. | No |
+| `Get-EFEndpointInventory` | Collects device and security inventory. | No |
+| `Get-EFInstalledSoftware` | Lists installed software from uninstall records. | No |
+| `Get-EFPendingReboot` | Checks whether Windows reports a pending restart. | No |
+| `Get-EFConfiguration` | Reads module session settings. | No |
+| `Set-EFConfiguration` | Changes EndpointForge logging and retry settings for the current session. | No Windows setting change |
 
-### “Requires elevation”, “Access denied”, or “Unable to set proper privileges”
+Use `Get-Help <command> -Full` for parameters and examples.
 
-Most summary, inventory, health, and compliance data works as a standard user. Windows
-may still restrict read-only BitLocker, TPM, Secure Boot, and optional-feature providers.
-Remediation always requires elevation when a change is needed.
+### Script result codes
 
-1. Keep the standard-user result as evidence; collection errors are exposed, not hidden.
-2. Open Windows Terminal or PowerShell with **Run as administrator**.
-3. Rerun `Get-EFEndpointSummary | Show-EFEndpointSummary -Detailed`.
-4. If access is still denied, check MDM, Group Policy, Defender tamper protection, and
-   application-control policy. Those controls can intentionally block local inspection or
-   changes.
+The combined check uses stable integer codes:
 
-Do not treat `Error` as compliant, and do not suppress it merely to obtain a green score.
-In automation, retain the report and use its `ExitCode`.
+| Code | Meaning |
+|---:|---|
+| `0` | Checked items look good. |
+| `1` | A warning or partial data needs attention. |
+| `2` | A critical issue or checklist difference was found. |
+| `3` | One or more required answers could not be collected. |
 
-### Secure Boot, TPM, BitLocker, Defender, or optional-feature data is unavailable
+The terminal only shows these codes in detailed or IT-focused views.
 
-First rerun elevated. If the result remains `NotApplicable`, the provider or capability may
-not exist on that Windows edition, Server role, virtual machine, firmware mode, or hardware
-model. If it remains `Error`, inspect the detailed control message:
+## EndpointForge and DSC
 
-```powershell
-$summary = Get-EFEndpointSummary -NoProgress
-$summary | Show-EFEndpointSummary -Detailed -NoColor
+Desired State Configuration (DSC) is a declarative configuration engine: an organization
+describes the state machines should have, then an orchestration system applies and
+maintains that state. EndpointForge is an operator-focused checkup and guarded-action
+tool. Its menu, explanations, reports, and narrow fix receipts are optimized for direct
+support and troubleshooting.
 
-$compliance = Get-EFComplianceReport
-$compliance.Results |
-    Where-Object Status -in 'Error', 'NotApplicable' |
-    Format-Table ControlId, Status, Message -Wrap
-```
+EndpointForge does not replace DSC for large-scale continuous configuration. They can be
+used together: EndpointForge for understandable diagnosis and evidence, and DSC or another
+approved management platform for centrally enforced configuration.
 
-Use device-class-specific baselines when a capability is intentionally absent. Audit-only
-controls report posture but are never enabled automatically.
+## Troubleshooting
 
-### The module installs but does not import
+### A setting says Could not check
 
-Confirm which copy PowerShell discovered and review effective execution policy:
-
-```powershell
-Get-Module -ListAvailable EndpointForge | Select-Object Name, Version, ModuleBase
-Get-ExecutionPolicy -List
-Import-Module EndpointForge -Verbose
-```
-
-If the error says scripts or format data are blocked, follow your organization's
-application-control and execution-policy process. Where organizational policy permits,
-`RemoteSigned` at `CurrentUser` scope is generally sufficient for locally created scripts;
-do not bypass a centrally managed policy. Reinstalling the module will not override Group
-Policy.
-
-### A remediation was attempted but verification failed
-
-The toolkit verifies a control after changing it and reports `VerificationFailed` rather
-than claiming success. Review the result message and correlation ID, then check for policy
-refresh, Defender tamper protection, a service that rejects the requested state, or a
-required restart:
+Run:
 
 ```powershell
-$result.Results |
-    Where-Object Outcome -in 'Failed', 'EvaluationFailed', 'VerificationFailed' |
-    Format-Table ControlId, Outcome, Message -Wrap
-
-$result.RebootRequired
-Get-EFPendingReboot
+Get-EFEndpointReadiness
+Get-EFEndpointSummary -NoProgress | Show-EFEndpointSummary -Detailed
 ```
 
-After resolving the owner policy or completing an approved restart, run
-`Get-EFComplianceReport` again. EndpointForge never restarts a device automatically.
+The Windows edition may not include that feature, a security product may own it, or the
+information may require **Run as administrator**. EndpointForge reports the uncertainty
+instead of guessing.
 
-### A custom baseline is rejected
+### A supported fix does not stay changed
 
-Validate the exact artifact before evaluating the endpoint:
+Group Policy, Intune, another device-management product, Defender tamper protection, or a
+security agent may own the setting. Use the before-and-after receipt, identify the policy
+owner, and make the lasting change through that approved system.
 
-```powershell
-Test-EFBaseline -Path .\Contoso.Workstation.json
-Get-EFBaseline -Path .\Contoso.Workstation.json
-```
+### Another computer cannot be reached
 
-Typical causes are malformed JSON, duplicate control IDs, a missing name or semantic
-version, an unsupported control type, or type-specific fields that do not match the JSON
-Schema. Start again with `New-EFBaseline` when comparing against a known-good template is
-faster than repairing the file.
+Confirm the name, network path, remoting policy, connecting account permission, and that
+EndpointForge 0.4.0 or later is installed on the target. The fleet command will not change
+those prerequisites for you.
 
-## Release and Gallery publication
+### The menu has no color
 
-Install the development-only quality tools, then run the source checks and tests in both
-Windows PowerShell 5.1 and PowerShell 7. The commands below show one host; repeat them in
-the other host or require a successful run of both jobs in `.github/workflows/ci.yml`:
+Color is disabled when output is redirected, when `NO_COLOR` is set, or when `-NoColor`
+is used. The words and ordering remain the same.
 
-```powershell
-$toolRoot = Join-Path $PWD '.build\dependencies'
-Save-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Path $toolRoot
-Save-Module Pester -RequiredVersion 5.7.1 -Path $toolRoot
-$env:PSModulePath = "$toolRoot;$env:PSModulePath"
+## Security and support
 
-.\build\Test-Module.ps1 -RequireScriptAnalyzer
-.\build\Invoke-PesterTests.ps1
-.\build\Test-WindowsRuntime.ps1
-```
+Read [SECURITY.md](SECURITY.md) before using privileged fixes or storing reports. Report
+security vulnerabilities privately through GitHub Security Advisories or the private
+contact documented there. Do not put production reports, credentials, computer names, or
+security findings in a public issue.
 
-The manifest identifies Logan Bamborough as the publisher and links to the public
-[EndpointForge repository](https://github.com/swaggysnippets/EndpointForge). GitHub private
-vulnerability reporting is enabled. Before Gallery publication, configure `PSGALLERY_API_KEY`
-as a secret in the protected `powershell-gallery` GitHub environment. Never commit, print, or
-place the Gallery key in a script or release artifact.
+General bugs and feature requests may be filed in the
+[GitHub repository](https://github.com/swaggysnippets/EndpointForge/issues) after removing
+sensitive data.
 
-Build once from the reviewed source and verify that exact staged package and SHA-256
-inventory. Do not edit `artifacts/EndpointForge` after this step; rebuild it instead:
+## Development and release verification
 
-```powershell
-.\build\Build-Module.ps1 -SkipTests
-$staged = .\build\Test-StagedModule.ps1
-$readiness = .\build\Test-PublishReadiness.ps1
-$staged | Format-List
-$readiness | Format-List
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). The repository includes
+Pester tests, PSScriptAnalyzer gates, Windows runtime smoke checks, staged-package
+verification, GitHub Actions for Windows PowerShell 5.1 and PowerShell 7, and a protected
+PowerShell Gallery publishing workflow.
 
-$manifest = Test-ModuleManifest .\artifacts\EndpointForge\EndpointForge.psd1
-$expectedVersion = [version](Read-Host 'Expected release version')
-if ($manifest.Version -ne $expectedVersion) {
-    throw "Review the release version before publishing: $($manifest.Version)"
-}
-if (-not $staged.HashesVerified) {
-    throw 'The staged package hash inventory was not verified.'
-}
-if (-not $readiness.IsReady) {
-    throw 'The staged package did not pass publish-readiness validation.'
-}
-```
-
-For an enterprise Authenticode release, sign the staged PowerShell files with an approved
-code-signing certificate and timestamp service, then require signatures in the final gate:
-
-```powershell
-.\build\Protect-StagedModule.ps1 `
-    -CertificateThumbprint '<approved code-signing certificate thumbprint>' `
-    -TimestampServer '<approved timestamp service URL>'
-
-.\build\Test-StagedModule.ps1
-.\build\Test-PublishReadiness.ps1 -RequireSignature
-```
-
-The signing command regenerates the external SHA-256 inventory. Do not rebuild after
-signing, because a rebuild intentionally replaces the staged directory from reviewed
-source.
-
-Enter the intended release version at the prompt. Review the staged `README.md`,
-`SECURITY.md`, `CONTRIBUTING.md`, manifest, release notes, and changelog; confirm the release
-tag will be exactly `v<manifest version>`. The preferred publication path is a GitHub release
-after required CI checks pass. `.github/workflows/publish.yml` validates the tag and
-publishes the newly built package using the protected environment secret.
-
-For an authorized manual fallback, use a current PowerShellGet installation and provide the
-API key through the process environment only after all preflight checks pass:
-
-```powershell
-if ([string]::IsNullOrWhiteSpace($env:PSGALLERY_API_KEY)) {
-    throw 'PSGALLERY_API_KEY is not configured in this process.'
-}
-
-Publish-Module `
-    -Path .\artifacts\EndpointForge `
-    -Repository PSGallery `
-    -NuGetApiKey $env:PSGALLERY_API_KEY `
-    -Verbose
-
-Remove-Item Env:\PSGALLERY_API_KEY -ErrorAction SilentlyContinue
-```
-
-After publication, install the released version into a clean session from PSGallery, import
-it, run `Get-Command -Module EndpointForge`, and verify a read-only assessment before
-announcing the release. PowerShell Gallery versions are immutable; publish a new version to
-correct a released package.
-
-## Security
-
-See [`SECURITY.md`](SECURITY.md). Test custom baselines in a representative ring, use `-WhatIf`, deploy read-only evaluation first, and approve remediating controls explicitly. Group Policy, MDM, or Defender tamper protection can intentionally override local changes; EndpointForge reports verification failure rather than claiming success.
+Releases include a SHA-256 file inventory. Authenticode signing is recommended where your
+organization requires signed PowerShell modules.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+EndpointForge is available under the [MIT License](LICENSE). Copyright 2026 Logan
+Bamborough.

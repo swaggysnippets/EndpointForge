@@ -1,22 +1,25 @@
 function Invoke-EFEndpointRemediation {
     <#
     .SYNOPSIS
-    Remediates supported noncompliant controls on the local Windows endpoint.
+    Previews or applies selected supported Windows setting fixes.
 
     .DESCRIPTION
-    Evaluates controls, changes only those marked Remediable, and evaluates them again.
-    The cmdlet supports WhatIf and Confirm, requires an elevated session when changes are
-    needed, and returns a result for every selected control. It never enables BitLocker,
-    Secure Boot, or a TPM automatically.
+    Reads selected checklist items, changes only the narrow types marked as supported
+    fixes, and checks them again. PowerShell scripts call this remediation. Use WhatIf for
+    a no-change preview. Applying requires PowerShell opened with Run as Administrator.
+
+    The result records before, expected, and after values plus recovery guidance. That
+    receipt is not an automatic rollback guarantee. This command never restarts Windows,
+    enables BitLocker, changes Secure Boot or firmware, or changes a TPM.
 
     .PARAMETER Baseline
-    A built-in baseline name, a JSON file path, or a validated baseline object.
+    The checklist to use: a built-in name, JSON file, or validated checklist object.
 
     .PARAMETER ControlId
-    Limits remediation to specific control identifiers.
+    Limits the preview or fix to specific checklist item IDs.
 
     .PARAMETER StopOnError
-    Stops after the first remediation error. By default, remaining controls continue.
+    Stops after the first selected fix cannot complete. By default, remaining items continue.
 
     .PARAMETER NoProgress
     Suppresses the progress display for non-interactive automation hosts.
@@ -58,7 +61,7 @@ function Invoke-EFEndpointRemediation {
     foreach ($control in $controls) {
         $evaluationIndex++
         if (-not $NoProgress) {
-            Write-Progress -Id 1103 -Activity 'EndpointForge remediation' `
+            Write-Progress -Id 1103 -Activity 'EndpointForge supported fixes' `
                 -Status "Checking $($control.Id): $($control.Title)" `
                 -PercentComplete ([math]::Round(($evaluationIndex / $controls.Count) * 30))
         }
@@ -70,10 +73,10 @@ function Invoke-EFEndpointRemediation {
     })
     if ($changeCandidates.Count -gt 0 -and -not $WhatIfPreference -and -not (Test-EFAdministrator)) {
         if (-not $NoProgress) {
-            Write-Progress -Id 1103 -Activity 'EndpointForge remediation' -Completed
+            Write-Progress -Id 1103 -Activity 'EndpointForge supported fixes' -Completed
         }
         throw [System.UnauthorizedAccessException]::new(
-            'Endpoint remediation requires an elevated PowerShell session. Re-run as Administrator, or use -WhatIf to preview changes.'
+            'Applying supported fixes requires PowerShell opened with Run as Administrator. Use -WhatIf for a preview that cannot change Windows.'
         )
     }
 
@@ -87,7 +90,7 @@ function Invoke-EFEndpointRemediation {
         foreach ($control in $controls) {
             $remediationIndex++
             if (-not $NoProgress) {
-                Write-Progress -Id 1103 -Activity 'EndpointForge remediation' `
+                Write-Progress -Id 1103 -Activity 'EndpointForge supported fixes' `
                     -Status "Processing $($control.Id): $($control.Title)" `
                     -PercentComplete (30 + [math]::Round(($remediationIndex / $controls.Count) * 70))
             }
@@ -95,6 +98,9 @@ function Invoke-EFEndpointRemediation {
             $outcome = $null
             $after = $before
             $message = $before.Message
+            $changeAttempted = $false
+            $afterReadAttempted = $false
+            $afterReadSucceeded = $false
 
             if ($before.Status -eq 'Compliant') {
                 $outcome = 'NotRequired'
@@ -110,14 +116,17 @@ function Invoke-EFEndpointRemediation {
             }
             else {
                 $target = "$env:COMPUTERNAME/$($control.Id)"
-                if ($PSCmdlet.ShouldProcess($target, "Remediate $($control.Title)")) {
+                if ($PSCmdlet.ShouldProcess($target, "Apply supported fix: $($control.Title)")) {
+                    $changeAttempted = $true
                     try {
                         $change = Invoke-EFControlRemediation -Control $control
                         $rebootRequired = $rebootRequired -or [bool]$change.RebootRequired
+                        $afterReadAttempted = $true
                         $after = Get-EFControlState -Control $control
+                        $afterReadSucceeded = $null -ne $after -and [string]$after.Status -ne 'Error'
                         if ($after.Status -eq 'Compliant') {
                             $outcome = 'Changed'
-                            $message = 'The control was remediated and verified.'
+                            $message = 'The setting changed successfully and the new value was checked.'
                         }
                         else {
                             $outcome = 'VerificationFailed'
@@ -126,9 +135,23 @@ function Invoke-EFEndpointRemediation {
                     }
                     catch {
                         $outcome = 'Failed'
-                        $message = $_.Exception.Message
+                        $remediationError = $_.Exception.Message
+                        $message = $remediationError
+                        $afterReadAttempted = $true
+                        try {
+                            $after = Get-EFControlState -Control $control
+                            $afterReadSucceeded = $null -ne $after -and [string]$after.Status -ne 'Error'
+                        }
+                        catch {
+                            $after = [pscustomobject]@{
+                                Status      = 'Error'
+                                ActualValue = $null
+                                Message     = $_.Exception.Message
+                            }
+                            $afterReadSucceeded = $false
+                        }
                         Write-EFLog -Level Error -Message "Remediation failed for control '$($control.Id)'." `
-                            -CorrelationId $correlationId -Data @{ error = $message }
+                            -CorrelationId $correlationId -Data @{ error = $remediationError; afterReadSucceeded = $afterReadSucceeded }
                         if ($StopOnError) {
                             $stopRequested = $true
                         }
@@ -136,29 +159,89 @@ function Invoke-EFEndpointRemediation {
                 }
                 else {
                     $outcome = if ($WhatIfPreference) { 'WhatIf' } else { 'Skipped' }
-                    $message = if ($WhatIfPreference) { 'The change was previewed; endpoint state was not modified.' } else { 'The change was declined.' }
+                    $message = if ($WhatIfPreference) { 'Preview only: this shows what would change. Windows was not modified.' } else { 'The change was not approved, so Windows was not modified.' }
                 }
             }
+
+            $beforeValue = Get-EFPropertyValue -InputObject $before -Name 'ActualValue'
+            $desiredValue = Get-EFPropertyValue -InputObject $before -Name 'DesiredValue' -Default (
+                Get-EFPropertyValue -InputObject $control -Name 'DesiredValue'
+            )
+            $afterValue = Get-EFPropertyValue -InputObject $after -Name 'ActualValue' -Default $beforeValue
+            $observedValueChanged = $false
+            if ($afterReadSucceeded) {
+                $beforeComparable = ConvertTo-Json -InputObject (ConvertTo-EFSerializableValue -InputObject $beforeValue) -Depth 12 -Compress
+                $afterComparable = ConvertTo-Json -InputObject (ConvertTo-EFSerializableValue -InputObject $afterValue) -Depth 12 -Compress
+                $observedValueChanged = $beforeComparable -cne $afterComparable
+            }
+            if ($outcome -eq 'Failed' -and $observedValueChanged) {
+                $outcome = 'PartiallyChanged'
+                $message = "$message A follow-up read found that at least one value changed, but the requested fix did not complete cleanly."
+            }
+            elseif ($outcome -eq 'Failed' -and -not $afterReadSucceeded) {
+                $message = "$message EndpointForge could not confirm the resulting value, so a partial change must not be ruled out."
+            }
+            $changeWasApplied = $outcome -eq 'Changed' -or $observedValueChanged
 
             $recommendedAction = switch ($outcome) {
                 'NotRequired' { 'No action required.' }
                 'NotApplicable' { 'No action is required on this endpoint.' }
-                'Changed' { 'No further action is required unless RebootRequired is true.' }
-                'WhatIf' { 'Apply this control from an elevated session using the same Baseline and ControlId parameters when approved.' }
-                'Skipped' { 'Run Invoke-EFEndpointRemediation again with the same Baseline and ControlId when the change is approved.' }
-                'NotRemediable' { 'Remediate this control through your approved enterprise policy or management platform.' }
+                'Changed' { 'Keep this receipt. If a restart is shown as required, schedule it through your approved process.' }
+                'PartiallyChanged' { 'Review the before and after values now. Use the recovery guidance and your approved Windows management process before trying again.' }
+                'VerificationFailed' { 'A change was attempted but the expected result was not confirmed. Review the observed after value and recovery guidance before trying again.' }
+                'WhatIf' { 'Review the preview. If it is approved, an administrator can apply this same selected item.' }
+                'Skipped' { 'Nothing changed. Run the fix again only after the change is approved.' }
+                'NotRemediable' { 'Follow the manual guidance approved by your organization. EndpointForge will not change this item.' }
                 'EvaluationFailed' { $before.RecommendedAction }
-                default { 'Review the failure details, correct the underlying issue, and try again.' }
+                default { 'Review the failure details and current Windows state before trying again; a partial change may have occurred.' }
             }
+
+            $whatChanged = switch ($outcome) {
+                'Changed' { "Changed from '$(ConvertTo-EFMenuValue $beforeValue)' to '$(ConvertTo-EFMenuValue $afterValue)'." }
+                'PartiallyChanged' { "A change from '$(ConvertTo-EFMenuValue $beforeValue)' to '$(ConvertTo-EFMenuValue $afterValue)' was observed, but the requested fix reported an error." }
+                'VerificationFailed' {
+                    if ($observedValueChanged) {
+                        "A change from '$(ConvertTo-EFMenuValue $beforeValue)' to '$(ConvertTo-EFMenuValue $afterValue)' was observed, but it did not produce the expected result."
+                    }
+                    else {
+                        'A change was attempted, but the expected result was not confirmed.'
+                    }
+                }
+                'WhatIf' { "Preview only: would change '$(ConvertTo-EFMenuValue $beforeValue)' to '$(ConvertTo-EFMenuValue $desiredValue)'." }
+                'Failed' {
+                    if ($changeAttempted -and -not $afterReadSucceeded) {
+                        'A change was attempted, but EndpointForge could not read a reliable after value.'
+                    }
+                    else {
+                        'No changed value was observed, but the requested fix reported an error.'
+                    }
+                }
+                default { 'No setting change was recorded for this item.' }
+            }
+            $recoveryGuidance = [string](Get-EFPropertyValue -InputObject $control -Name 'RecoveryGuidance' -Default (
+                'EndpointForge does not automatically roll back changes. Use the before value in this receipt and your approved Windows management process if recovery is needed.'
+            ))
 
             $resultItem = [pscustomobject]@{
                 PSTypeName   = 'EndpointForge.RemediationResult'
+                ReceiptVersion = '1.0'
                 ControlId    = [string]$control.Id
                 Title        = [string]$control.Title
                 Severity     = [string]$control.Severity
                 BeforeStatus = [string]$before.Status
+                BeforeValue  = $beforeValue
+                DesiredValue = $desiredValue
                 Outcome      = $outcome
-                AfterStatus  = [string]$after.Status
+                AfterStatus  = [string](Get-EFPropertyValue -InputObject $after -Name 'Status' -Default 'Error')
+                AfterValue   = $afterValue
+                ChangeWasApplied = $changeWasApplied
+                ChangeMayHaveOccurred = $changeAttempted
+                AfterReadWasAttempted = $afterReadAttempted
+                AfterStateWasObserved = $afterReadSucceeded
+                WhatChanged  = $whatChanged
+                WhatWouldChange = [string](Get-EFPropertyValue -InputObject $control -Name 'WhatWouldChange' -Default '')
+                SafetyNotes  = [string](Get-EFPropertyValue -InputObject $control -Name 'SafetyNotes' -Default '')
+                RecoveryGuidance = $recoveryGuidance
                 Message      = $message
                 RecommendedAction = $recommendedAction
             }
@@ -169,35 +252,44 @@ function Invoke-EFEndpointRemediation {
         }
     )
     if (-not $NoProgress) {
-        Write-Progress -Id 1103 -Activity 'EndpointForge remediation' -Completed
+        Write-Progress -Id 1103 -Activity 'EndpointForge supported fixes' -Completed
     }
 
-    $failureCount = @($results | Where-Object Outcome -in @('Failed', 'EvaluationFailed', 'VerificationFailed')).Count
+    $failureCount = @($results | Where-Object Outcome -in @('Failed', 'PartiallyChanged', 'EvaluationFailed', 'VerificationFailed')).Count
     $remainingCount = @($results | Where-Object AfterStatus -eq 'NonCompliant').Count
     $changedCount = @($results | Where-Object Outcome -eq 'Changed').Count
+    $observedChangeCount = @($results | Where-Object ChangeWasApplied).Count
+    $partialChangeCount = @($results | Where-Object {
+        $_.Outcome -in @('PartiallyChanged', 'VerificationFailed') -and [bool]$_.ChangeWasApplied
+    }).Count
     $previewCount = @($results | Where-Object Outcome -eq 'WhatIf').Count
     $unprocessedCount = $controls.Count - $results.Count
     $exitCode = if ($failureCount -gt 0) { 3 } elseif ($remainingCount -gt 0) { 2 } else { 0 }
     $summaryText = if ($previewCount -gt 0) {
-        "$previewCount change(s) were previewed; endpoint state was not modified."
+        "$previewCount supported change(s) were previewed. Windows was not modified."
     }
     elseif ($failureCount -gt 0) {
-        "$changedCount change(s) succeeded and $failureCount action(s) failed."
+        "$changedCount change(s) completed; $failureCount had an error. $partialChangeCount error result(s) showed a changed after-value."
     }
     elseif ($remainingCount -gt 0) {
-        "$changedCount change(s) succeeded; $remainingCount noncompliant control(s) remain."
+        "$changedCount change(s) succeeded; $remainingCount checklist item(s) still need attention."
     }
     else {
-        "Remediation completed successfully with $changedCount verified change(s)."
+        "$changedCount approved change(s) completed and were checked."
     }
-    $nextStep = if ($rebootRequired) {
+    $nextStep = if ($exitCode -ne 0) {
+        if ($rebootRequired) {
+            'Review every error, before-and-after value, and recovery note now; no failed item should be assumed fixed. A completed change also requires a restart through your approved process, but review the errors before restarting.'
+        }
+        else {
+            'Review each result and its recovery guidance. No failed item should be assumed fixed.'
+        }
+    }
+    elseif ($rebootRequired) {
         'Schedule a restart through your approved change process; EndpointForge does not restart devices automatically.'
     }
-    elseif ($exitCode -ne 0) {
-        'Review Results.RecommendedAction for unresolved controls.'
-    }
     else {
-        'Run Get-EFComplianceReport to confirm the complete baseline state.'
+        'Run another computer checkup to confirm the full checklist, and keep this before-and-after receipt.'
     }
 
     $report = [pscustomobject]@{
@@ -212,12 +304,16 @@ function Invoke-EFEndpointRemediation {
         Summary           = $summaryText
         NextStep          = $nextStep
         ChangedCount      = $changedCount
+        ObservedChangeCount = $observedChangeCount
+        PartialChangeCount = $partialChangeCount
         CandidateCount    = $changeCandidates.Count
         PreviewCount      = $previewCount
         RemainingCount    = $remainingCount
         FailureCount      = $failureCount
         UnprocessedCount  = $unprocessedCount
         RebootRequired    = $rebootRequired
+        CanAutomaticallyRollback = $false
+        RollbackExplanation = 'EndpointForge records before and after values but does not automatically roll back changes. Windows policy, device management, or later changes may control the setting.'
         Results           = $results
     }
 

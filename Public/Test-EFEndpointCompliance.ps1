@@ -1,18 +1,19 @@
 function Test-EFEndpointCompliance {
     <#
     .SYNOPSIS
-    Tests whether the local Windows endpoint is compliant.
+    Tests whether checked Windows settings match a checklist.
 
     .DESCRIPTION
-    Returns a Boolean by default so the command behaves naturally in if statements and
-    automation conditions. Use PassThru to receive the complete compliance report, or
-    call Get-EFComplianceReport directly for reporting and diagnostics.
+    A checklist is a list of expected Windows settings; scripts call it a baseline and
+    call a matching result compliant. This command reads settings without changing them
+    and returns True only when every checked value matches and none were unreadable. Use
+    PassThru for the full results, including why an item could not be checked.
 
     .PARAMETER Baseline
-    A built-in baseline name, a JSON file path, or a validated baseline object.
+    A built-in checklist name, checklist JSON file, or validated checklist object.
 
     .PARAMETER ControlId
-    One or more control identifiers to test. All controls are tested by default.
+    One or more checklist item IDs to test. Every item is tested by default.
 
     .PARAMETER PassThru
     Returns the EndpointForge.ComplianceReport instead of a Boolean.

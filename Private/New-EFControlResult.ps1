@@ -30,20 +30,26 @@ function New-EFControlResult {
         'NotApplicable' { 'No action is required on this endpoint.' }
         'NonCompliant' {
             if ($remediable) {
-                'Generate a baseline-aware preview with Get-EFRemediationPlan, then review Invoke-EFEndpointRemediation -WhatIf.'
+                'Review a fix plan, then preview the exact change before an administrator approves it.'
             }
             else {
-                'Review this control and remediate it through your approved enterprise policy or management platform.'
+                'Review this item and follow the manual guidance approved by your organization.'
             }
         }
         'Error' {
             if ($Message -match 'elevat|access.+denied|administrator|privilege') {
-                'Run the assessment from an elevated PowerShell session, then evaluate this control again.'
+                'Open PowerShell as Administrator and run the check again. No setting was changed.'
             }
             else {
-                'Review the error, verify that the Windows capability is available, and evaluate this control again.'
+                'Review why the item could not be checked, then run the check again. No setting was changed.'
             }
         }
+    }
+    $defaultWhatWouldChange = if ($remediable) {
+        'EndpointForge can preview the supported setting change before an administrator approves it.'
+    }
+    else {
+        'Nothing. EndpointForge reports this item but does not change it automatically.'
     }
 
     [pscustomobject]@{
@@ -57,6 +63,15 @@ function New-EFControlResult {
         DesiredValue  = $DesiredValue
         Message       = $Message
         Remediable    = $remediable
+        CanFixAutomatically = $remediable
+        WhyItMatters  = [string](Get-EFPropertyValue -InputObject $Control -Name 'WhyItMatters' -Default (
+            Get-EFPropertyValue -InputObject $Control -Name 'Description' -Default 'This item is part of the selected Windows settings checklist.'
+        ))
+        HowChecked    = [string](Get-EFPropertyValue -InputObject $Control -Name 'HowChecked' -Default 'EndpointForge reads the related Windows setting and compares it with the checklist.')
+        WhatWouldChange = [string](Get-EFPropertyValue -InputObject $Control -Name 'WhatWouldChange' -Default $defaultWhatWouldChange)
+        ManualAction  = [string](Get-EFPropertyValue -InputObject $Control -Name 'ManualAction' -Default 'Ask your IT administrator to review this item using your organization''s approved process.')
+        SafetyNotes   = [string](Get-EFPropertyValue -InputObject $Control -Name 'SafetyNotes' -Default 'Review the current and expected values before making any change.')
+        RecoveryGuidance = [string](Get-EFPropertyValue -InputObject $Control -Name 'RecoveryGuidance' -Default 'Use the before value in the change receipt and your approved Windows management process if recovery is needed.')
         RecommendedAction = $recommendedAction
         EvaluatedAtUtc = [DateTime]::UtcNow
     }

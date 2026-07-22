@@ -4,6 +4,39 @@ All notable changes use the structure from Keep a Changelog, and versions follow
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-21
+
+### Added
+
+- Goal-based beginner menu for checking a computer, understanding results, safely fixing selected problems, saving and comparing reports, checking prepared remote computers, and managing checklists.
+- Read-only `Get-EFEndpointReadiness` preflight that explains platform, permission, remote-session, checklist, provider, and fix availability without evaluating settings.
+- Conservative `Compare-EFEndpointSummary` before-and-after comparisons for objects, menu reports, menu sessions, and exported JSON.
+- Self-contained, UTF-8 HTML reports with embedded styling, encoded data, and no scripts or external resources.
+- Strictly read-only `Get-EFFleetSummary` aggregation for computers that already have PowerShell remoting and EndpointForge configured.
+- Plain-language explanation, safety, manual-action, and recovery fields for every built-in checklist item.
+- Before/expected/after values, change descriptions, and recovery guidance in fix receipts.
+
+### Changed
+
+- Replaced the flat jargon-heavy menu with nested workflows organized around user goals; the main screen now labels read-only, file-writing, and setting-changing choices.
+- Standard-user sessions can complete the mandatory no-change preview before being told how to reopen PowerShell as Administrator.
+- Terminal summaries translate internal status values into everyday language and reserve item IDs and script result codes for detailed or IT views.
+- Remediation plans and results describe who can act, why an item matters, what would change, restart impact, and what was observed before and after.
+- The built-in checklist and JSON schema now support optional explanation and recovery fields.
+- Documentation now defines checklist, baseline, control, compliance, preview, and remediation before using the technical terms.
+
+### Safety
+
+- Comparisons never call missing or unreadable later evidence an improvement and warn when computer identity or checklist version differs.
+- Fleet checks never install the module, enable remoting or TrustedHosts, retain credentials, or invoke fixes.
+- EndpointForge explicitly records that receipts are not automatic rollback guarantees because policy and later Windows changes can own a setting.
+- The unattended Intune example starts with an empty deployment approval list and requires a fresh successful preview before applying listed items.
+
+### Fixed
+
+- A supported fix that changes one value before a later step fails now performs a follow-up read and records the observed partial change instead of showing the earlier value as the after-state.
+- Blocked readiness values render as one plain-language status in HTML reports.
+
 ## [0.3.0] - 2026-07-21
 
 ### Added

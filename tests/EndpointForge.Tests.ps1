@@ -16,9 +16,10 @@ Describe 'EndpointForge module contract' {
 
     It 'exports only the documented public commands' {
         $expected = @(
-            'Export-EFEndpointReport', 'Get-EFBaseline', 'Get-EFComplianceReport',
+            'Compare-EFEndpointSummary', 'Export-EFEndpointReport', 'Get-EFBaseline', 'Get-EFComplianceReport',
             'Get-EFConfiguration', 'Get-EFEndpointHealth', 'Get-EFEndpointInventory',
-            'Get-EFEndpointSummary', 'Get-EFInstalledSoftware', 'Get-EFPendingReboot',
+            'Get-EFEndpointReadiness', 'Get-EFEndpointSummary', 'Get-EFFleetSummary',
+            'Get-EFInstalledSoftware', 'Get-EFPendingReboot',
             'Get-EFRemediationPlan', 'Invoke-EFEndpointRemediation', 'New-EFBaseline',
             'Set-EFConfiguration', 'Show-EFEndpointSummary', 'Show-EFMenu', 'Test-EFBaseline',
             'Test-EFEndpointCompliance'
@@ -688,10 +689,10 @@ Describe 'EndpointForge guided menu experience' {
 
         $session.ExitReason | Should -Be 'Quit'
         $session.ErrorCount | Should -Be 1
-        $session.Errors[0].Action | Should -Be 'Assessment'
+        $session.Errors[0].Action | Should -Be 'Check this computer'
         $session.Errors[0].Message | Should -Match 'Synthetic collection failure'
         Should -Invoke Read-Host -ModuleName EndpointForge -Times 2 -Exactly
-        Should -Invoke Write-Host -ModuleName EndpointForge -ParameterFilter { [string]$Object -match '\[ERROR\]' }
+        Should -Invoke Write-Host -ModuleName EndpointForge -ParameterFilter { [string]$Object -match '\[COULD NOT COMPLETE\]' }
     }
 
     It 'builds a read-only plan without invoking remediation' {
@@ -703,6 +704,9 @@ Describe 'EndpointForge guided menu experience' {
         $script:EFMenuInputs.Enqueue('3')
         $script:EFMenuInputs.Enqueue('Q')
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
+        Mock Get-EFEndpointSummary -ModuleName EndpointForge {
+            [pscustomobject]@{ ComputerName = 'MENU-PC'; OverallStatus = 'Healthy'; CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 0; UnknownCount = 0 }
+        }
         Mock Get-EFRemediationPlan -ModuleName EndpointForge { $plan }
         Mock Invoke-EFEndpointRemediation -ModuleName EndpointForge { throw 'Planning must not remediate.' }
 
@@ -727,8 +731,11 @@ Describe 'EndpointForge guided menu experience' {
             CandidateCount = 1; ChangedCount = 0; PreviewCount = 1; FailureCount = 0;
             Results = @([pscustomobject]@{ Outcome = 'WhatIf'; ControlId = 'AUTO-TWO'; Title = 'Second' }); NextStep = 'Apply when approved.'
         }
-        @('4', '2', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
+        @('3', '2', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
+        Mock Get-EFEndpointSummary -ModuleName EndpointForge {
+            [pscustomobject]@{ ComputerName = 'MENU-PC'; OverallStatus = 'Warning'; CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 1; UnknownCount = 0 }
+        }
         Mock Get-EFRemediationPlan -ModuleName EndpointForge { $plan }
         Mock Invoke-EFEndpointRemediation -ModuleName EndpointForge { $preview }
 
@@ -755,8 +762,11 @@ Describe 'EndpointForge guided menu experience' {
             CandidateCount = 1; ChangedCount = 0; PreviewCount = 1; FailureCount = 0;
             Results = @([pscustomobject]@{ Outcome = 'WhatIf'; ControlId = 'AUTO-ONE'; Title = 'First' }); NextStep = 'Apply when approved.'
         }
-        @('5', 'A', 'cancel', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
+        @('3', 'A', 'cancel', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
+        Mock Get-EFEndpointSummary -ModuleName EndpointForge {
+            [pscustomobject]@{ ComputerName = 'MENU-PC'; OverallStatus = 'Warning'; CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 1; UnknownCount = 0 }
+        }
         Mock Get-EFRemediationPlan -ModuleName EndpointForge { $plan }
         Mock Invoke-EFEndpointRemediation -ModuleName EndpointForge { $preview }
 
@@ -765,7 +775,7 @@ Describe 'EndpointForge guided menu experience' {
         $session.LastRemediation | Should -BeNullOrEmpty
         Should -Invoke Invoke-EFEndpointRemediation -ModuleName EndpointForge -Times 1 -Exactly -ParameterFilter { $WhatIf }
         Should -Invoke Invoke-EFEndpointRemediation -ModuleName EndpointForge -Times 0 -Exactly -ParameterFilter { -not $WhatIf }
-        ($session.History | Where-Object Action -eq 'Apply remediation').Status | Should -Contain 'Cancelled'
+        ($session.History | Where-Object Action -eq 'Safe fix assistant').Status | Should -Contain 'Cancelled'
     }
 
     It 'clears cached results when the active baseline changes' {
@@ -773,7 +783,7 @@ Describe 'EndpointForge guided menu experience' {
             PSTypeName = 'EndpointForge.EndpointSummary'; ComputerName = 'MENU-PC'; OverallStatus = 'Healthy';
             CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 0; UnknownCount = 0
         }
-        @('1', '7', 'EnterpriseRecommended', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
+        @('1', '6', '1', 'B', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
         Mock Get-EFEndpointSummary -ModuleName EndpointForge { $summary }
         Mock Show-EFEndpointSummary -ModuleName EndpointForge {}
@@ -782,7 +792,7 @@ Describe 'EndpointForge guided menu experience' {
 
         $session.LastSummary | Should -BeNullOrEmpty
         $session.BaselineName | Should -Be 'EnterpriseRecommended'
-        ($session.History | Where-Object Action -eq 'Select baseline').Status | Should -Contain 'Completed'
+        ($session.History | Where-Object Action -eq 'Select checklist').Status | Should -Contain 'Completed'
     }
 
     It 'returns actionable guidance when the host cannot prompt for input' {
@@ -797,7 +807,7 @@ Describe 'EndpointForge guided menu experience' {
             PSTypeName = 'EndpointForge.EndpointSummary'; ComputerName = 'MENU-PC'; OverallStatus = 'Healthy';
             CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 0; UnknownCount = 0
         }
-        @('1', '6', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
+        @('1', '4', '2', 'B', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
         Mock Get-EFEndpointSummary -ModuleName EndpointForge { $summary }
         Mock Show-EFEndpointSummary -ModuleName EndpointForge {}
@@ -835,22 +845,36 @@ Describe 'EndpointForge guided menu experience' {
             PSTypeName = 'EndpointForge.EndpointSummary'; ComputerName = 'MENU-PC'; OverallStatus = 'Healthy';
             CompletedAtUtc = [DateTime]::UtcNow; IssueCount = 0; UnknownCount = 0
         }
-        @('5', 'A', 'APPLY', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
+        @('3', 'A', 'APPLY', 'Q') | ForEach-Object { $script:EFMenuInputs.Enqueue($_) }
         Mock Read-Host -ModuleName EndpointForge { $script:EFMenuInputs.Dequeue() }
         Mock Get-EFRemediationPlan -ModuleName EndpointForge { $plan }
-        Mock Invoke-EFEndpointRemediation -ModuleName EndpointForge { if ($WhatIf) { $preview } else { $applied } }
+        Mock Invoke-EFEndpointRemediation -ModuleName EndpointForge { $preview } -ParameterFilter { $WhatIf }
+        Mock Invoke-EFEndpointRemediation -ModuleName EndpointForge { $applied } -ParameterFilter { -not $WhatIf }
         Mock Get-EFEndpointSummary -ModuleName EndpointForge { $summary }
         Mock Show-EFEndpointSummary -ModuleName EndpointForge {}
+        Mock Compare-EFEndpointSummary -ModuleName EndpointForge {
+            [pscustomobject]@{
+                Summary = 'One item improved.'; NextStep = 'Save the receipt.';
+                BeforeComputerName = 'MENU-PC'; AfterComputerName = 'MENU-PC';
+                DifferentComputer = $false; ChecklistChanged = $false; ImprovedCount = 1;
+                NewIssueCount = 0; CouldNotCheckCount = 0; UnchangedCount = 0;
+                BeforeScore = 80; AfterScore = 100; ScoreChange = 20;
+                BeforeCoveragePercent = 100; AfterCoveragePercent = 100; CoverageChange = 0;
+                Changes = @()
+            }
+        }
+        Mock Write-EFMenuComparison -ModuleName EndpointForge {}
 
         $session = Show-EFMenu -NoProgress -NoPause -NoColor -PassThru
 
-        [object]::ReferenceEquals($applied, $session.LastRemediation) | Should -BeTrue
-        [object]::ReferenceEquals($summary, $session.LastSummary) | Should -BeTrue
+        $session.ErrorCount | Should -Be 0 -Because ($session.Errors.Message -join '; ')
+        $session.LastRemediation.Summary | Should -Be 'One change completed.'
+        $session.LastSummary.ComputerName | Should -Be 'MENU-PC'
         $session.LastPlan | Should -BeNullOrEmpty
         Should -Invoke Invoke-EFEndpointRemediation -ModuleName EndpointForge -Times 1 -Exactly -ParameterFilter { $WhatIf }
         Should -Invoke Invoke-EFEndpointRemediation -ModuleName EndpointForge -Times 1 -Exactly -ParameterFilter {
             -not $WhatIf -and $Confirm -eq $false -and @($ControlId).Count -eq 1 -and $ControlId -contains 'AUTO-ONE'
         }
-        Should -Invoke Get-EFEndpointSummary -ModuleName EndpointForge -Times 1 -Exactly
+        Should -Invoke Get-EFEndpointSummary -ModuleName EndpointForge -Times 2 -Exactly
     }
 }

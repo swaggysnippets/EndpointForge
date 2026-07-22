@@ -1,12 +1,14 @@
 function Export-EFEndpointReport {
     <#
     .SYNOPSIS
-    Exports EndpointForge objects to JSON, CSV, or CLIXML.
+    Exports EndpointForge objects to HTML, JSON, CSV, or CLIXML.
 
     .DESCRIPTION
-    Accepts pipeline input and writes a UTF-8 report. Nested properties are preserved in
-    JSON and CLIXML; CSV serializes nested values as compact JSON strings. Existing files
-    require Force. The command supports WhatIf and Confirm.
+    Accepts pipeline input and writes a report. HTML creates a self-contained,
+    plain-language report for people; it does not load scripts, fonts, or other content
+    from the internet. Nested properties are preserved in JSON and CLIXML; CSV serializes
+    nested values as compact JSON strings. Existing files require Force. The command
+    supports WhatIf and Confirm.
 
     .PARAMETER InputObject
     One or more EndpointForge or PowerShell objects to export.
@@ -15,7 +17,7 @@ function Export-EFEndpointReport {
     The destination path. A matching extension is appended when none is provided.
 
     .PARAMETER Format
-    Json, Csv, or Clixml. When omitted, the format is inferred from the destination
+    Html, Json, Csv, or Clixml. When omitted, the format is inferred from the destination
     extension and defaults to Json when the path has no extension.
 
     .PARAMETER Depth
@@ -36,6 +38,9 @@ function Export-EFEndpointReport {
     .EXAMPLE
     Get-EFInstalledSoftware | Export-EFEndpointReport -Path .\software.csv -Format Csv -Force
 
+    .EXAMPLE
+    Get-EFEndpointSummary -NoProgress | Export-EFEndpointReport -Path .\computer-check.html
+
     .OUTPUTS
     System.IO.FileInfo when PassThru is specified.
 
@@ -52,7 +57,7 @@ function Export-EFEndpointReport {
         [ValidateNotNullOrEmpty()]
         [string]$Path,
 
-        [ValidateSet('Json', 'Csv', 'Clixml')]
+        [ValidateSet('Html', 'Json', 'Csv', 'Clixml')]
         [string]$Format,
 
         [ValidateRange(2, 100)]
@@ -77,6 +82,8 @@ function Export-EFEndpointReport {
         $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
         $pathExtension = [IO.Path]::GetExtension($resolvedPath).ToLowerInvariant()
         $extensionFormat = switch ($pathExtension) {
+            '.html' { 'Html' }
+            '.htm' { 'Html' }
             '.json' { 'Json' }
             '.csv' { 'Csv' }
             '.clixml' { 'Clixml' }
@@ -86,7 +93,7 @@ function Export-EFEndpointReport {
 
         if (-not [string]::IsNullOrWhiteSpace($pathExtension) -and $null -eq $extensionFormat) {
             throw [System.ArgumentException]::new(
-                "Report extension '$pathExtension' is not supported. Use .json, .csv, or .clixml."
+                "Report extension '$pathExtension' is not supported. Use .html, .json, .csv, or .clixml."
             )
         }
         if ($null -ne $extensionFormat -and $PSBoundParameters.ContainsKey('Format') -and $extensionFormat -ne $Format) {
@@ -95,7 +102,7 @@ function Export-EFEndpointReport {
             )
         }
         if ([string]::IsNullOrWhiteSpace($pathExtension)) {
-            $extension = switch ($effectiveFormat) { 'Json' { '.json' } 'Csv' { '.csv' } 'Clixml' { '.clixml' } }
+            $extension = switch ($effectiveFormat) { 'Html' { '.html' } 'Json' { '.json' } 'Csv' { '.csv' } 'Clixml' { '.clixml' } }
             $resolvedPath += $extension
         }
         if ($AsArray -and $effectiveFormat -ne 'Json') {
@@ -125,6 +132,10 @@ function Export-EFEndpointReport {
         $output = if ($items.Count -eq 1 -and -not $AsArray) { $items[0] } else { @($items) }
         $utf8WithoutBom = [Text.UTF8Encoding]::new($false)
         switch ($effectiveFormat) {
+            'Html' {
+                $html = ConvertTo-EFHtmlReport -InputObject $items.ToArray() -Title 'EndpointForge computer report'
+                [IO.File]::WriteAllText($resolvedPath, $html, $utf8WithoutBom)
+            }
             'Json' {
                 if ($AsArray) {
                     $serializableItems = [Collections.Generic.List[object]]::new()
