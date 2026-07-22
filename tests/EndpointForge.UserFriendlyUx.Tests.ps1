@@ -1,7 +1,9 @@
-$script:UserFriendlyProjectRoot = Split-Path -Parent $PSScriptRoot
-$script:UserFriendlyManifestPath = Join-Path $script:UserFriendlyProjectRoot 'EndpointForge.psd1'
-Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
-Import-Module $script:UserFriendlyManifestPath -Force
+BeforeAll {
+    $script:UserFriendlyProjectRoot = Split-Path -Parent $PSScriptRoot
+    $script:UserFriendlyManifestPath = Join-Path $script:UserFriendlyProjectRoot 'EndpointForge.psd1'
+    Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
+    Import-Module $script:UserFriendlyManifestPath -Force
+}
 
 AfterAll {
     Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
