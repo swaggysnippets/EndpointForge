@@ -288,16 +288,32 @@ jobs:
           }
 
           $installRoot = Join-Path $env:RUNNER_TEMP 'EndpointForgeCleanInstall'
+          [void](New-Item -ItemType Directory -Path $installRoot -Force)
           Save-Module EndpointForge -RequiredVersion $env:RELEASE_VERSION -Repository PSGallery -Path $installRoot
           $installedManifest = Join-Path $installRoot "EndpointForge\$env:RELEASE_VERSION\EndpointForge.psd1"
+          $installedModulePath = Split-Path -Parent $installedManifest
           $installed = Test-ModuleManifest $installedManifest -ErrorAction Stop
           if ($installed.Version -ne [version]$env:RELEASE_VERSION -or $installed.ExportedFunctions.Count -ne 22) {
             throw 'The clean Gallery package did not expose the expected version and 22-command contract.'
           }
-          .\build\Test-StagedModule.ps1 -ModulePath (Split-Path -Parent $installedManifest) `
+
+          # PowerShellGet adds this hidden client-side cache file after extracting the
+          # Gallery package. It is not part of the published module and must not weaken
+          # the exact package file-set and SHA-256 comparison.
+          $powerShellGetMetadata = Join-Path $installedModulePath 'PSGetModuleInfo.xml'
+          if (Test-Path -LiteralPath $powerShellGetMetadata -PathType Leaf) {
+            $metadataItem = Get-Item -LiteralPath $powerShellGetMetadata -Force
+            if (($metadataItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+              $metadataItem.Length -gt 1MB) {
+              throw 'PowerShellGet produced an unsafe local metadata file.'
+            }
+            Remove-Item -LiteralPath $powerShellGetMetadata -Force
+          }
+
+          .\build\Test-StagedModule.ps1 -ModulePath $installedModulePath `
             -HashInventoryPath .\artifacts\EndpointForge.sha256.json
           if ($env:WAS_SIGNED -eq 'true') {
-            .\build\Test-PublishReadiness.ps1 -ModulePath (Split-Path -Parent $installedManifest) `
+            .\build\Test-PublishReadiness.ps1 -ModulePath $installedModulePath `
               -RequireSignature -ExpectedSignerThumbprint $env:EXPECTED_SIGNER
           }
           .\build\Test-WindowsRuntime.ps1 -ModulePath $installedManifest
