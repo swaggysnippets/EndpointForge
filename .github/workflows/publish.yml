@@ -326,8 +326,20 @@ jobs:
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -ne 0) {
+          $previousErrorActionPreference = $ErrorActionPreference
+          try {
+            # A missing release is an expected branch on the first run. Windows
+            # PowerShell can promote native stderr to an ErrorRecord, so probe it
+            # without allowing the expected 404 to terminate this step.
+            $ErrorActionPreference = 'SilentlyContinue'
+            gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+            $releaseExists = $LASTEXITCODE -eq 0
+          }
+          finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+          }
+
+          if (-not $releaseExists) {
             $arguments = @(
               'release', 'create', $env:RELEASE_TAG,
               '--repo', $env:GITHUB_REPOSITORY,
