@@ -49,8 +49,11 @@ else {
 if ($null -ne $analyzer) {
     Write-Output "Running PSScriptAnalyzer $($analyzer.Version)..."
     Import-Module $analyzer.Path -Force
+    # PSScriptAnalyzer documents script and module inputs. Data manifests remain
+    # covered by the parser pass above and by Test-ModuleManifest.
+    $analyzerSourceFiles = @($sourceFiles | Where-Object Extension -in @('.ps1', '.psm1'))
     $analysis = @(
-        foreach ($sourceFile in $sourceFiles) {
+        foreach ($sourceFile in $analyzerSourceFiles) {
             Invoke-ScriptAnalyzer -Path $sourceFile.FullName -Severity Warning,Error
         }
     )
