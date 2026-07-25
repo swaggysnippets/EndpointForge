@@ -1,8 +1,16 @@
-BeforeAll {
+BeforeDiscovery {
     $script:UserFriendlyProjectRoot = Split-Path -Parent $PSScriptRoot
     $script:UserFriendlyManifestPath = Join-Path $script:UserFriendlyProjectRoot 'EndpointForge.psd1'
     Remove-Module EndpointForge -Force -ErrorAction SilentlyContinue
     Import-Module $script:UserFriendlyManifestPath -Force
+}
+
+BeforeAll {
+    $script:UserFriendlyProjectRoot = Split-Path -Parent $PSScriptRoot
+    $script:UserFriendlyManifestPath = Join-Path $script:UserFriendlyProjectRoot 'EndpointForge.psd1'
+    if (-not (Get-Module -Name EndpointForge)) {
+        Import-Module $script:UserFriendlyManifestPath -Force
+    }
 }
 
 AfterAll {
@@ -114,8 +122,10 @@ Describe 'EndpointForge change receipts' {
                 RecoveryGuidance = 'Use the before value through the approved process.'
             }
             $checklist = [pscustomobject]@{
-                Name = 'PartialReceiptTest'; Version = '1.0.0'; Description = 'Partial receipt test checklist.'; Controls = @($control)
+                Name = 'PartialReceiptTest'; Version = '1.0.0'; Description = 'Partial receipt test checklist.';
+                IntegrityVerified = $true; Controls = @($control)
             }
+            Register-EFBaselineIntegrityApproval -Baseline $checklist -Method ExpectedSha256
             $script:partialStateRead = 0
             Mock Test-EFWindows { $true }
             Mock Test-EFAdministrator { $true }
@@ -159,8 +169,10 @@ Describe 'EndpointForge change receipts' {
                 RequiresReboot = $true; RecoveryGuidance = 'Review the before and after values.'
             }
             $checklist = [pscustomobject]@{
-                Name = 'VerificationReceiptTest'; Version = '1.0.0'; Description = 'Verification receipt test checklist.'; Controls = @($control)
+                Name = 'VerificationReceiptTest'; Version = '1.0.0'; Description = 'Verification receipt test checklist.';
+                IntegrityVerified = $true; Controls = @($control)
             }
+            Register-EFBaselineIntegrityApproval -Baseline $checklist -Method ExpectedSha256
             $script:verificationStateRead = 0
             Mock Test-EFWindows { $true }
             Mock Test-EFAdministrator { $true }
@@ -196,8 +208,10 @@ Describe 'EndpointForge change receipts' {
                 RequiresReboot = $false; RecoveryGuidance = 'Inspect the setting manually before retrying.'
             }
             $checklist = [pscustomobject]@{
-                Name = 'UnreadableReceiptTest'; Version = '1.0.0'; Description = 'Unreadable receipt test checklist.'; Controls = @($control)
+                Name = 'UnreadableReceiptTest'; Version = '1.0.0'; Description = 'Unreadable receipt test checklist.';
+                IntegrityVerified = $true; Controls = @($control)
             }
+            Register-EFBaselineIntegrityApproval -Baseline $checklist -Method ExpectedSha256
             $script:unreadableStateRead = 0
             Mock Test-EFWindows { $true }
             Mock Test-EFAdministrator { $true }

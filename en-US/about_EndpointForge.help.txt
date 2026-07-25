@@ -2,20 +2,25 @@ TOPIC
     about_EndpointForge
 
 SHORT DESCRIPTION
-    User-friendly Windows computer checkups, safe fix previews, comparisons, and reports.
+    User-friendly Windows computer checkups, safe fix previews, management-agent support,
+    comparisons, and reports.
 
 LONG DESCRIPTION
     A checklist is simply a list of things expected to be true, such as Windows settings,
-    storage, applications, jobs, files, certificates, recent events, or an available
+    storage, applications, jobs, files, certificates, Windows management information,
+    recent events, or an available
     network service. Selecting, viewing, creating, or validating one does not run it or
     change Windows. EndpointForge helps a person answer practical questions such as:
 
         1. Does this computer look healthy?
         2. Is a restart waiting, is storage running low, or are updates available?
-        3. Are expected applications, jobs, files, certificates, and settings in place?
-        4. Can the computer reach approved DNS, TCP, and web services?
-        5. Which problems can EndpointForge safely preview and fix?
-        6. What changed between an earlier check and a later check?
+        3. Are expected applications, jobs, files, certificates, management information
+           areas, and settings in place?
+        4. Is the computer using an approved local IP range?
+        5. Can the computer reach approved DNS, TCP, and web services?
+        6. Which problems can EndpointForge safely preview and fix?
+        7. What changed between an earlier check and a later check?
+        8. Do the local Intune or Configuration Manager support components look ready?
 
     The guided menu uses everyday language and labels whether each choice reads
     information, creates a file, or can change a Windows setting. Normal checks do not
@@ -98,6 +103,15 @@ EVERYDAY TERMS
     Endpoint
         An IT term for a managed computer.
 
+    Management agent
+        A local Microsoft component that receives and performs work assigned by an
+        organization's Intune or Configuration Manager service.
+
+    Machine policy
+        Configuration Manager instructions assigned to a computer. A request asks for
+        current instructions. An evaluation asks the local client to process instructions
+        it already has.
+
     Receipt
         A record of an attempted fix, including the value before, the value afterward,
         the result, safety notes, and recovery guidance.
@@ -137,6 +151,12 @@ GOAL-BASED MENU
            Selects, loads, validates, or creates checklist files. Selecting a checklist
            never applies its settings.
 
+        7. Help with Intune or Configuration Manager
+           Explains these Microsoft management tools, reads fixed local agent evidence,
+           and previews one tightly limited support action. Applying an action can change
+           a service or begin management work, so the menu requires Administrator
+           permission plus exact NETWORK and APPLY acknowledgements.
+
         A. Tools for IT scripts and troubleshooting
         H. Help that explains every choice
         Q. Exit
@@ -160,6 +180,116 @@ READINESS
     protected or unavailable items may be reported as Could not check or report-only.
     Review the result details before deciding whether to reopen PowerShell with Run as
     administrator.
+
+MANAGEMENT AGENT SUPPORT
+    Intune and Configuration Manager are Microsoft services organizations can use to send
+    applications, settings, scripts, updates, and other work to Windows computers.
+    EndpointForge 0.8.0 introduced local support for their Windows agents, and 0.9.0
+    hardens its truth, privacy, and timeout behavior. Menu option 7 is
+    the recommended guided experience.
+
+    Read fixed local evidence for both agents:
+
+        Get-EFManagementAgentHealth
+
+    Select one agent when needed:
+
+        Get-EFManagementAgentHealth -Agent Intune
+        Get-EFManagementAgentHealth -Agent ConfigurationManager
+
+    CCM, SCCM, and ConfigMgr are accepted as familiar names for ConfigurationManager.
+    This command reads the fixed local service state and startup setting, standard main-log
+    presence and last-write time, and the fixed local Configuration Manager client
+    interface when applicable. It does not contact a management service, read log contents,
+    or return policy, application, account, tenant, site, device, or server identifiers.
+    Optional TimeoutSeconds bounds only the local Configuration Manager interface check;
+    it defaults to 10 seconds and accepts 1 through 30.
+
+    Each result has one LocalStatus:
+
+        LooksReady
+            Fixed local evidence looks ready. This does not prove a recent or successful
+            management-service check-in.
+
+        NeedsAttention
+            A known local service, startup, or Configuration Manager interface issue was
+            found.
+
+        NotDetected
+            The named local agent was not found.
+
+        CouldNotCheck
+            EndpointForge could not collect trustworthy local evidence. Do not assume the
+            agent is healthy or broken.
+
+    The Intune Management Extension is installed only when assigned Intune work requires
+    it. NotDetected for that extension alone does not prove that the computer is not
+    enrolled in Intune.
+
+    Preview every support action first:
+
+        Invoke-EFManagementAgentAction `
+            -Agent Intune `
+            -Action RestartAgentService `
+            -WhatIf
+
+    The fixed actions are:
+
+        StartAgentService
+            Intune or Configuration Manager. Starts the local agent service if stopped.
+            A check-in and assigned work can begin.
+
+        RestartAgentService
+            Intune or Configuration Manager. Restarts the local agent service. This can
+            interrupt active work, begin a check-in, and start assigned work.
+
+        RequestMachinePolicy
+            Configuration Manager only. Asks the local client to contact its configured
+            service for current computer instructions.
+
+        EvaluateMachinePolicy
+            Configuration Manager only. Asks the local client to process computer
+            instructions it already downloaded.
+
+    An actual request needs PowerShell opened with Run as administrator, explicit
+    -AllowManagementTraffic, and normal high-impact PowerShell confirmation:
+
+        Invoke-EFManagementAgentAction `
+            -Agent ConfigMgr `
+            -Action RequestMachinePolicy `
+            -AllowManagementTraffic
+
+    Every action can cause management traffic or begin assigned applications, scripts,
+    policy, updates, and other work. -AllowManagementTraffic records acknowledgement of
+    that possibility; it is not a network authorization system. TimeoutSeconds bounds the
+    local wait, defaults to 60 seconds, and accepts 5 through 300. A timeout after an action
+    begins can leave the outcome uncertain.
+
+    RequestMachinePolicy and EvaluateMachinePolicy return when the local client accepts or
+    rejects the request. An accepted request is asynchronous. It does not prove that a
+    check-in, download, evaluation, or assigned task finished successfully. Confirm final
+    device state through the organization's normal management console and support process.
+
+    EndpointForge does not expose arbitrary commands, arbitrary WMI or CIM methods,
+    Configuration Manager schedule IDs, remote targets, fleet actions, policy reset, cache
+    deletion, agent reinstall, management-data removal, or device re-enrollment.
+
+    Microsoft documentation:
+
+        Intune Management Extension
+        https://learn.microsoft.com/en-us/intune/device-management/tools/management-extension-windows
+
+        Configuration Manager SMS_Client class
+        https://learn.microsoft.com/en-us/intune/configmgr/develop/reference/core/clients/client-classes/sms_client-client-wmi-class
+
+        RequestMachinePolicy
+        https://learn.microsoft.com/en-us/intune/configmgr/develop/reference/core/clients/client-classes/requestmachinepolicy-method-in-class-sms_client
+
+        EvaluateMachinePolicy
+        https://learn.microsoft.com/en-us/intune/configmgr/develop/reference/core/clients/client-classes/evaluatemachinepolicy-method-in-class-sms_client
+
+        Configuration Manager client health checks
+        https://learn.microsoft.com/en-us/intune/configmgr/core/clients/manage/client-health-checks
 
 RUN A COMPUTER CHECK
     The recommended read-only script command is:
@@ -321,7 +451,7 @@ CHECK OTHER COMPUTERS WITHOUT CHANGING THEM
     every target computer must already:
 
         - allow PowerShell remoting under the organization's policy;
-        - have EndpointForge 0.6.0 or later installed; and
+        - have a contract-compatible EndpointForge 0.8.0 or later installed; and
         - allow the connecting account to run the check.
 
     EndpointForge does not install itself remotely, enable WinRM, change TrustedHosts,
@@ -375,7 +505,8 @@ CHECKLISTS FOR AN ORGANIZATION
             -PassThru
 
     Create editable report-only examples for computer health, applications, jobs, files,
-    logs, certificates, access, and approved network checks:
+    logs, certificates, Windows management information, local network placement, access,
+    and approved network checks:
 
         New-EFBaseline `
             -Name Contoso.EverydayChecks `
@@ -383,7 +514,8 @@ CHECKLISTS FOR AN ORGANIZATION
             -Path .\checklists\Contoso.EverydayChecks.json
 
     Replace every sample application, job, file path, search text, event source and ID,
-    certificate, account, host, port, and web address before running the new checklist.
+    certificate, account, host, port, web address, management namespace, IP range, and
+    optional network connection name before running the new checklist.
     The installed examples\EverydayChecks.json file explains each property in plain
     language.
 
@@ -405,7 +537,12 @@ CHECKLISTS FOR AN ORGANIZATION
     source control, and protect them from untrusted writes before an Administrator
     process uses them. Validate after every edit and before every deployment.
 
-    EndpointForge 0.6.0 supports 24 checklist item types. The menu can show this catalog
+    EndpointForge does not run command lines or PowerShell script text stored in a
+    checklist. A checklist can be used by an Administrator or SYSTEM process, so raw
+    commands would turn configuration data into arbitrary code. Structured item types
+    provide bounded checks without changing that trust boundary.
+
+    EndpointForge 0.9.0 supports 26 checklist item types. The menu can show this catalog
     without running a check.
 
 WHAT EACH TYPE ANSWERS
@@ -417,6 +554,7 @@ WHAT EACH TYPE ANSWERS
     BitLocker                 Is this drive protected by BitLocker?
     SecureBoot                Is Secure Boot turned on?
     Tpm                       Is the computer security chip present and ready?
+    CimNamespaceExists        Does this Windows management information area exist?
     PendingRestart            Does this computer need to restart?
     DiskSpace                 Does this drive have enough free space?
     WindowsUpdateAvailable    Is the number of waiting Windows updates within the allowed limit?
@@ -433,6 +571,7 @@ WHAT EACH TYPE ANSWERS
     DnsResolution             Can this computer find this server name?
     HttpEndpointHealth        Is this website or web service responding as expected?
     LocalGroupMembership      Is this approved account directly in this local group?
+    IpAddressInRange          Is this computer on an approved IP range?
 
 NEW EVERYDAY HEALTH TYPES
     PendingRestart has no target property. DesiredValue is normally false. EndpointForge
@@ -462,6 +601,50 @@ NEW EVERYDAY HEALTH TYPES
     active antivirus provider, the item is Not used on this computer rather than passing.
     If Defender status cannot be read or does not contain trustworthy signature-age
     information, the result is Could not check.
+
+WINDOWS MANAGEMENT INFORMATION TYPE
+    A namespace is a named area Windows and management tools use to organize management
+    information. CimNamespaceExists requires Namespace set to root or one exact local path
+    below it, such as root\ccm. Product-specific paths may exist only on computers where
+    that product is installed. Each path segment must begin with a letter and contain only
+    letters, numbers, or underscores. TimeoutSeconds defaults to 10 and accepts 1 through
+    30. A checklist can contain at most 32 namespace items.
+
+    EndpointForge uses a time-limited local CIM query. Its evidence value is Boolean, and
+    the result includes plain-language status but no WMI classes, instances, property
+    values, or provider data. It accepts no server name, credentials, free-form query,
+    command, or script text. Missing is Does not match; access, provider, malformed
+    evidence, and timeout failures are Could not check.
+
+LOCAL NETWORK PLACEMENT TYPE
+    IpAddressInRange checks whether this computer has an eligible local address in an
+    approved network range. ApprovedRanges is a required JSON array containing 1 through
+    32 unique IPv4 or IPv6 CIDR networks, such as 10.20.0.0/16 or 2001:db8::/32. CIDR is a
+    compact way to write a network address followed by the number of leading bits that
+    identify that network. Each value must begin at the network address. Match-all /0
+    ranges, host names, masks, start-end ranges, wildcards, scoped or mapped IPv6,
+    shorthand IPv4, leading-zero IPv4, and ranges with host bits are rejected.
+
+    By default, EndpointForge considers eligible addresses on every active, non-loopback
+    physical, virtual, or VPN connection. Optional InterfaceName narrows the item to one
+    exact Windows connection name. To view locally managed names, use:
+
+        Get-NetAdapter | Select-Object -ExpandProperty Name
+
+    The item is true when any eligible local address belongs to any approved range. Other
+    local addresses do not make it fail. TimeoutSeconds defaults to 10 and accepts 1
+    through 30. A checklist can contain at most 16 IP-range items. A missing, down,
+    loopback-only, or ambiguous named connection is Could not check rather than false.
+
+    This check reads local connection state in a time-limited worker and performs CIDR math
+    locally. It does not contact DNS, a gateway, or another service, so it does not require
+    -AllowNetworkChecks. Generated evidence contains a Boolean answer and generic prose,
+    but does not copy detected addresses or ApprovedRanges values and omits adapter objects,
+    hardware addresses, gateways, DNS settings, and routes. The checklist, Get-EFBaseline,
+    and author-provided titles or explanation fields still contain whatever the author
+    wrote, so protect them as configuration data. A range result can reveal whether the
+    computer fits a network grouping; authorize checklist authors and report readers
+    accordingly.
 
 NEW APPLICATION AND JOB TYPES
     InstalledApplication requires one exact ApplicationName. Publisher and ProductCode are
@@ -539,28 +722,35 @@ NEW NETWORK TYPES
     them until -AllowNetworkChecks is supplied. A checklist can contain at most 32
     network-active items and only one WindowsUpdateAvailable item. Review and approve every
     destination, identity lookup, update option, and purpose before allowing the checks.
+    IpAddressInRange is not network-active because it reads only local connection state and
+    performs local address math.
 
 PRIVACY AND ANSWER QUALITY
     FileContainsText returns no matching lines. WindowsEvent returns no event messages or
-    data. Task actions, certificate identity data, process details, unrelated group
-    identities, resolved addresses, HTTP headers and response bodies, and update metadata are omitted. Checklist files
-    still contain their targets, so protect them and their reports according to the
-    organization's data rules.
+    data. Task actions, certificate identity data, process details, WMI classes and values,
+    unrelated group identities, detected local addresses, resolved addresses, HTTP headers
+    and response bodies, and update metadata are omitted. Checklist files still contain
+    their targets, including approved ranges, so protect them and their reports according
+    to the organization's data rules.
 
     A known absence, such as a missing file, freshness target, task, application, process,
-    certificate thumbprint, local group, or direct membership, is false when Windows
-    successfully supplied the evidence. An ordinarily refused or timed-out TCP or HTTP
+    certificate thumbprint, WMI/CIM namespace, local group, or direct membership, is false
+    when Windows successfully supplied the evidence. A complete local address snapshot
+    with no address in an approved range is also false. An ordinarily refused or timed-out TCP or HTTP
     request and an unresolved name are also false when the check completes normally. An
     inaccessible source, permission failure, incomplete update scan, warning, ambiguous
-    identity lookup, or hard worker timeout is Could not check. Inactive Defender ownership
-    is Not used on this computer. Missing or uncertain evidence is never silently treated
-    as success.
+    identity lookup, missing or unavailable named network connection, local-enumeration
+    safety-limit failure, or hard worker timeout is Could not check. Inactive Defender
+    ownership is Not used on this computer. Missing or uncertain evidence is never silently
+    treated as success.
 
 COMMANDS FOR SCRIPTS
     Commands whose names begin with Get or Test return PowerShell objects and do not
     change Windows. Show commands display information for a person. New and Export
-    commands write files only when requested. Invoke-EFEndpointRemediation is the command
-    that can change supported Windows settings; -WhatIf turns it into a no-change preview.
+    commands write files only when requested. Invoke-EFEndpointRemediation can change
+    supported Windows settings. Invoke-EFManagementAgentAction can change one local agent
+    service or request fixed management work. -WhatIf turns either Invoke command into a
+    no-change preview.
 
     Useful discovery commands are:
 
@@ -568,6 +758,8 @@ COMMANDS FOR SCRIPTS
         Get-Help Show-EFMenu -Full
         Get-Help Get-EFEndpointSummary -Full
         Get-Help Invoke-EFEndpointRemediation -Full
+        Get-Help Get-EFManagementAgentHealth -Full
+        Get-Help Invoke-EFManagementAgentAction -Full
 
     Test-EFEndpointCompliance returns $true only when every applicable selected item
     matches and no checking error occurred. Add -PassThru, or use
@@ -616,10 +808,19 @@ SECURITY BOUNDARIES
         - query Win32_Product for installed software;
         - download and execute remote content;
         - include matching log lines or Windows event contents in checklist results;
+        - read management-agent log contents, policy, application data, tenant or site
+          identifiers, device IDs, account names, or server addresses;
+        - expose arbitrary management-agent commands, WMI or CIM methods, schedule IDs,
+          remote targets, or fleet repair;
+        - reset policy, delete an agent cache, reinstall an agent, remove management data,
+          or re-enroll a computer;
         - bypass Group Policy, mobile-device management, Defender tamper protection,
           application-control policy, or another security product;
         - apply an automatic menu change without selection, preview, Administrator
-          permission, and exact APPLY acknowledgement; or
+          permission, and exact APPLY acknowledgement;
+        - in the guided menu, apply a management-agent action without preview,
+          Administrator permission, explicit management-traffic approval, and exact
+          NETWORK and APPLY acknowledgement; or
         - promise automatic rollback.
 
     Installed software is read from Windows uninstall registry records. Unsupported or
@@ -650,6 +851,11 @@ TROUBLESHOOTING
     If a fix reports VerificationFailed or does not stay changed, Group Policy, Intune,
     another management product, Defender tamper protection, or a security agent may own
     the setting. Review the receipt and use the owning system for the lasting change.
+
+    If a management-agent action is accepted but expected results are not visible yet,
+    remember that policy and assigned work are asynchronous. Recheck local health, then
+    confirm device and assignment status in the organization's management console. Do not
+    repeatedly restart, reset, reinstall, or clear agent data to force an immediate result.
 
     If a remote computer cannot be reached, confirm its name, network path, remoting
     policy, connecting-account permission, and installed EndpointForge version. The fleet
@@ -685,6 +891,7 @@ SEE ALSO
     Get-EFEndpointHealth
     Get-EFInstalledSoftware
     Get-EFPendingReboot
+    Get-EFManagementAgentHealth
     Get-EFBaseline
     New-EFBaseline
     Test-EFBaseline
@@ -692,6 +899,7 @@ SEE ALSO
     Get-EFComplianceReport
     Get-EFRemediationPlan
     Invoke-EFEndpointRemediation
+    Invoke-EFManagementAgentAction
     Export-EFEndpointReport
     Get-EFConfiguration
     Set-EFConfiguration

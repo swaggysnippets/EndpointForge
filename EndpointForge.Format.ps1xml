@@ -451,5 +451,49 @@
         </TableColumnItems></TableRowEntry></TableRowEntries>
       </TableControl>
     </View>
+    <View>
+      <Name>EndpointForge.ManagementAgentHealth</Name>
+      <ViewSelectedBy><TypeName>EndpointForge.ManagementAgentHealth</TypeName></ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Agent</Label><Width>22</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Local status</Label><Width>15</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Service</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Startup</Label><Width>11</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Last local activity</Label><Width>21</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Summary</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries><TableRowEntry><TableColumnItems>
+          <TableColumnItem><PropertyName>Agent</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>LocalStatus</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>ServiceStatus</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>StartupType</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>LastLocalActivityUtc</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Summary</PropertyName></TableColumnItem>
+        </TableColumnItems></TableRowEntry></TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
+      <Name>EndpointForge.ManagementAgentActionResult</Name>
+      <ViewSelectedBy><TypeName>EndpointForge.ManagementAgentActionResult</TypeName></ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Agent</Label><Width>22</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Action</Label><Width>24</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Outcome</Label><Width>18</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Before service</Label><Width>14</Width></TableColumnHeader>
+          <TableColumnHeader><Label>After service</Label><Width>14</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Summary</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries><TableRowEntry><TableColumnItems>
+          <TableColumnItem><PropertyName>Agent</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Action</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Outcome</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>BeforeServiceStatus</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>AfterServiceStatus</PropertyName></TableColumnItem>
+          <TableColumnItem><PropertyName>Summary</PropertyName></TableColumnItem>
+        </TableColumnItems></TableRowEntry></TableRowEntries>
+      </TableControl>
+    </View>
   </ViewDefinitions>
 </Configuration>

@@ -1,11 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/swaggysnippets/EndpointForge/v1.0.0/Data/Baseline.schema.json",
   "title": "EndpointForge baseline",
   "type": "object",
   "required": ["Name", "Version", "Description", "Controls"],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "FormatVersion": {
+      "const": "1.0",
+      "description": "The EndpointForge checklist file-format contract. Files created before EndpointForge 1.0 that omit this property are read as format 1.0 for compatibility."
+    },
     "Name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
     "Version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$" },
     "Description": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
@@ -13,12 +23,31 @@
       "type": "array",
       "minItems": 1,
       "maxItems": 256,
-      "items": { "$ref": "#/$defs/control" }
+      "items": { "$ref": "#/$defs/control" },
+      "contains": {
+        "type": "object",
+        "required": ["Type"],
+        "properties": { "Type": { "const": "CimNamespaceExists" } }
+      },
+      "minContains": 0,
+      "maxContains": 32,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["Type"],
+            "properties": { "Type": { "const": "IpAddressInRange" } }
+          },
+          "minContains": 0,
+          "maxContains": 16
+        }
+      ]
     }
   },
   "$defs": {
     "control": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["Id", "Title", "Type", "Severity", "DesiredValue", "Remediable"],
       "allOf": [
         {
@@ -55,7 +84,7 @@
                   "FileExists", "FileContainsText", "WindowsEvent", "TcpPort", "BitLocker", "SecureBoot", "Tpm",
                   "PendingRestart", "DiskSpace", "WindowsUpdateAvailable", "InstalledApplication", "ScheduledTaskHealth",
                   "DefenderSignatureHealth", "FileFreshness", "CertificateExpiry", "DnsResolution", "HttpEndpointHealth",
-                  "ProcessRunning", "LocalGroupMembership"
+                  "ProcessRunning", "LocalGroupMembership", "CimNamespaceExists", "IpAddressInRange"
                 ]
               }
             }
@@ -70,7 +99,7 @@
                   "FirewallProfile", "SecureBoot", "FileExists", "FileContainsText", "WindowsEvent", "TcpPort",
                   "PendingRestart", "DiskSpace", "WindowsUpdateAvailable", "InstalledApplication", "ScheduledTaskHealth",
                   "DefenderSignatureHealth", "FileFreshness", "CertificateExpiry", "DnsResolution", "HttpEndpointHealth",
-                  "ProcessRunning", "LocalGroupMembership"
+                  "ProcessRunning", "LocalGroupMembership", "CimNamespaceExists", "IpAddressInRange"
                 ]
               }
             }
@@ -190,6 +219,53 @@
           }
         },
         {
+          "if": { "properties": { "Type": { "const": "CimNamespaceExists" } } },
+          "then": {
+            "required": ["Namespace"],
+            "propertyNames": {
+              "enum": [
+                "Id", "Title", "Description", "WhyItMatters", "HowChecked", "WhatWouldChange",
+                "ManualAction", "SafetyNotes", "RecoveryGuidance", "Type", "Severity", "DesiredValue",
+                "Remediable", "RequiresReboot", "Namespace", "TimeoutSeconds"
+              ]
+            },
+            "properties": {
+              "Namespace": {
+                "type": "string", "minLength": 4, "maxLength": 2048,
+                "pattern": "^[Rr][Oo][Oo][Tt](?:\\\\[A-Za-z][A-Za-z0-9_]{0,127}){0,15}$"
+              },
+              "TimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 30, "default": 10 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "Type": { "const": "IpAddressInRange" } } },
+          "then": {
+            "required": ["ApprovedRanges"],
+            "propertyNames": {
+              "enum": [
+                "Id", "Title", "Description", "WhyItMatters", "HowChecked", "WhatWouldChange",
+                "ManualAction", "SafetyNotes", "RecoveryGuidance", "Type", "Severity", "DesiredValue",
+                "Remediable", "RequiresReboot", "ApprovedRanges", "InterfaceName", "TimeoutSeconds"
+              ]
+            },
+            "properties": {
+              "ApprovedRanges": {
+                "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+                "items": {
+                  "type": "string", "minLength": 4, "maxLength": 128,
+                  "pattern": "^[0-9A-Fa-f:./]+$"
+                }
+              },
+              "InterfaceName": {
+                "type": "string", "minLength": 1, "maxLength": 256,
+                "pattern": "^(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001F\\u007F*?\\[\\]]).+$"
+              },
+              "TimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 30, "default": 10 }
+            }
+          }
+        },
+        {
           "if": { "properties": { "Type": { "const": "BitLocker" } } },
           "then": { "properties": { "DesiredValue": { "const": "On" } } }
         },
@@ -225,7 +301,7 @@
             "FileExists", "FileContainsText", "WindowsEvent", "TcpPort", "BitLocker", "SecureBoot", "Tpm",
             "PendingRestart", "DiskSpace", "WindowsUpdateAvailable", "InstalledApplication", "ScheduledTaskHealth",
             "DefenderSignatureHealth", "FileFreshness", "CertificateExpiry", "DnsResolution", "HttpEndpointHealth",
-            "ProcessRunning", "LocalGroupMembership"
+            "ProcessRunning", "LocalGroupMembership", "CimNamespaceExists", "IpAddressInRange"
           ]
         },
         "Severity": { "enum": ["Low", "Medium", "High", "Critical"] },
@@ -283,7 +359,7 @@
         "MaximumCount": { "type": "integer", "minimum": 0, "maximum": 1000, "default": 0 },
         "IncludeOptional": { "type": "boolean", "default": false },
         "IncludeDrivers": { "type": "boolean", "default": false },
-        "TimeoutSeconds": { "type": "integer", "minimum": 10, "maximum": 600 },
+        "TimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 600 },
         "ApplicationName": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$" },
         "Publisher": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$" },
         "ProductCode": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$" },
@@ -310,7 +386,25 @@
         "AllowRedirects": { "type": "boolean", "default": false },
         "ProcessName": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?![.][Ee][Xx][Ee]$)[^\\u0000-\\u001F\\u007F/\\\\:*?\\[\\]]+$" },
         "GroupName": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$" },
-        "MemberName": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$" }
+        "MemberName": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001F\\u007F*?\\[\\]]+$" },
+        "Namespace": {
+          "type": "string", "minLength": 4, "maxLength": 2048,
+          "pattern": "^[Rr][Oo][Oo][Tt](?:\\\\[A-Za-z][A-Za-z0-9_]{0,127}){0,15}$",
+          "description": "One exact local WMI/CIM namespace beginning with root. Remote paths, server names, free-form queries, and wildcards are not accepted."
+        },
+        "ApprovedRanges": {
+          "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+          "items": {
+            "type": "string", "minLength": 4, "maxLength": 128,
+            "pattern": "^[0-9A-Fa-f:./]+$"
+          },
+          "description": "One through 32 canonical IPv4 or IPv6 CIDR network ranges. Runtime validation rejects /0, host bits, shorthand IPv4, zone IDs, wildcards, and duplicates after binary normalization."
+        },
+        "InterfaceName": {
+          "type": "string", "minLength": 1, "maxLength": 256,
+          "pattern": "^(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001F\\u007F*?\\[\\]]).+$",
+          "description": "Optional exact Windows network connection name. Wildcards and leading or trailing whitespace are not accepted."
+        }
       }
     }
   }

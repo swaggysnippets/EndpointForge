@@ -34,8 +34,12 @@ function Invoke-EFEndpointRemediation {
 
     .EXAMPLE
     Invoke-EFEndpointRemediation -ControlId EF-FW-DOMAIN,EF-UAC-ENABLED -Confirm:$false
+
+    .OUTPUTS
+    EndpointForge.RemediationReport
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    [OutputType('EndpointForge.RemediationReport')]
     param(
         [Parameter(Position = 0)]
         [AllowNull()]
@@ -53,6 +57,13 @@ function Invoke-EFEndpointRemediation {
     $null = Test-EFWindows -Throw
     $correlationId = [guid]::NewGuid().ToString()
     $resolvedBaseline = Resolve-EFBaseline -Baseline $Baseline
+    $approvedBaselineSnapshot = Get-EFApprovedBaselineSnapshot -Baseline $resolvedBaseline
+    $baselineIntegrityApproved = $null -ne $approvedBaselineSnapshot
+    if (-not $WhatIfPreference -and $baselineIntegrityApproved) {
+        # Use a private source-only snapshot so a concurrently mutated public object can
+        # never become the input to a changing operation.
+        $resolvedBaseline = $approvedBaselineSnapshot
+    }
     $controls = @($resolvedBaseline.Controls)
 
     if ($PSBoundParameters.ContainsKey('ControlId') -and $null -ne $ControlId -and $ControlId.Length -gt 0) {
@@ -86,6 +97,15 @@ function Invoke-EFEndpointRemediation {
     $changeCandidates = @($controls | Where-Object {
         $beforeResults[[string]$_.Id].Status -eq 'NonCompliant' -and [bool]$_.Remediable
     })
+    if ($changeCandidates.Count -gt 0 -and -not $WhatIfPreference -and
+        -not $baselineIntegrityApproved) {
+        if (-not $NoProgress) {
+            Write-Progress -Id 1103 -Activity 'EndpointForge supported fixes' -Completed
+        }
+        throw [System.Security.SecurityException]::new(
+            'Applying fixes from a custom checklist requires approved file integrity represented by an unchanged, module-approved checklist object. Load it with Get-EFBaseline -Path <file> -ExpectedSha256 <approved hash>, then pass that exact returned object without copying or modifying it. WhatIf previews remain available without a hash.'
+        )
+    }
     if ($changeCandidates.Count -gt 0 -and -not $WhatIfPreference -and -not (Test-EFAdministrator)) {
         if (-not $NoProgress) {
             Write-Progress -Id 1103 -Activity 'EndpointForge supported fixes' -Completed

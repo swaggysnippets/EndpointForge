@@ -5,10 +5,6 @@ function Assert-EFBaseline {
         [object]$Baseline
     )
 
-    $name = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'Name')
-    $version = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'Version')
-    $description = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'Description')
-    $controls = @(Get-EFPropertyValue -InputObject $Baseline -Name 'Controls')
     $assertSafeText = {
         param(
             [AllowNull()]
@@ -21,6 +17,37 @@ function Assert-EFBaseline {
             throw [System.IO.InvalidDataException]::new("$Label must not contain control characters.")
         }
     }
+    $isResolvedEndpointForgeBaseline = @($Baseline.PSObject.TypeNames) -contains 'EndpointForge.Baseline'
+    $allowedBaselineProperties = @('$schema', 'FormatVersion', 'Name', 'Version', 'Description', 'Controls')
+    if ($isResolvedEndpointForgeBaseline) {
+        $allowedBaselineProperties += @(
+            'SourcePath', 'SourceSha256', 'IntegrityVerified', 'IntegrityMethod',
+            'ControlCount', 'RemediableCount'
+        )
+    }
+    $baselinePropertyNames = if ($Baseline -is [Collections.IDictionary]) {
+        @($Baseline.Keys | ForEach-Object { [string]$_ })
+    }
+    else {
+        @($Baseline.PSObject.Properties.Name)
+    }
+    foreach ($baselinePropertyName in $baselinePropertyNames) {
+        & $assertSafeText $baselinePropertyName 'A baseline property name'
+    }
+    $unsupportedBaselineProperties = @(
+        $baselinePropertyNames | Where-Object { $_ -notin $allowedBaselineProperties }
+    )
+    if ($unsupportedBaselineProperties.Count -gt 0) {
+        throw [System.IO.InvalidDataException]::new(
+            'Baseline contains one or more unsupported checklist properties.'
+        )
+    }
+
+    $name = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'Name')
+    $formatVersion = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'FormatVersion' -Default '1.0')
+    $version = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'Version')
+    $description = [string](Get-EFPropertyValue -InputObject $Baseline -Name 'Description')
+    $controls = @(Get-EFPropertyValue -InputObject $Baseline -Name 'Controls')
     $testInteger = {
         param([AllowNull()][object]$Value)
 
@@ -30,24 +57,34 @@ function Assert-EFBaseline {
             $Value -is [int64] -or $Value -is [uint64]
     }
 
+    & $assertSafeText $name 'Baseline Name'
+    & $assertSafeText $formatVersion 'Baseline FormatVersion'
+    & $assertSafeText $version 'Baseline Version'
+    & $assertSafeText $description 'Baseline Description'
+    if (Test-EFPropertyPresent -InputObject $Baseline -Name '$schema') {
+        & $assertSafeText (Get-EFPropertyValue -InputObject $Baseline -Name '$schema') `
+            'Baseline schema identifier'
+    }
     if ([string]::IsNullOrWhiteSpace($name)) {
         throw [System.IO.InvalidDataException]::new('A baseline must define a non-empty Name.')
     }
+    if ($formatVersion -cne '1.0') {
+        throw [System.IO.InvalidDataException]::new(
+            "Baseline '$name' uses unsupported FormatVersion '$formatVersion'. EndpointForge 1.x supports checklist format 1.0."
+        )
+    }
     if ($name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
-        throw [System.IO.InvalidDataException]::new("Baseline Name '$name' must contain only letters, numbers, dots, underscores, and hyphens.")
+        throw [System.IO.InvalidDataException]::new('Baseline Name must contain only letters, numbers, dots, underscores, and hyphens.')
     }
     if ([string]::IsNullOrWhiteSpace($version)) {
         throw [System.IO.InvalidDataException]::new("Baseline '$name' must define a Version.")
     }
     if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
-        throw [System.IO.InvalidDataException]::new("Baseline '$name' Version '$version' is not a semantic version.")
+        throw [System.IO.InvalidDataException]::new("Baseline '$name' Version is not a semantic version.")
     }
     if ([string]::IsNullOrWhiteSpace($description)) {
         throw [System.IO.InvalidDataException]::new("Baseline '$name' must define a non-empty Description.")
     }
-    & $assertSafeText $name 'Baseline Name'
-    & $assertSafeText $version "Baseline '$name' Version"
-    & $assertSafeText $description "Baseline '$name' Description"
     if ($controls.Count -eq 0) {
         throw [System.IO.InvalidDataException]::new("Baseline '$name' must contain at least one control.")
     }
@@ -61,48 +98,99 @@ function Assert-EFBaseline {
         'BitLocker', 'SecureBoot', 'Tpm', 'PendingRestart', 'DiskSpace',
         'WindowsUpdateAvailable', 'InstalledApplication', 'ScheduledTaskHealth',
         'DefenderSignatureHealth', 'FileFreshness', 'CertificateExpiry',
-        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership'
+        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership',
+        'CimNamespaceExists', 'IpAddressInRange'
     )
     $reportOnlyTypes = @(
         'FileExists', 'FileContainsText', 'WindowsEvent', 'TcpPort', 'BitLocker', 'SecureBoot', 'Tpm',
         'PendingRestart', 'DiskSpace', 'WindowsUpdateAvailable', 'InstalledApplication',
         'ScheduledTaskHealth', 'DefenderSignatureHealth', 'FileFreshness', 'CertificateExpiry',
-        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership'
+        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership',
+        'CimNamespaceExists', 'IpAddressInRange'
     )
     $booleanDesiredTypes = @(
         'FirewallProfile', 'SecureBoot', 'FileExists', 'FileContainsText', 'WindowsEvent', 'TcpPort',
         'PendingRestart', 'DiskSpace', 'WindowsUpdateAvailable', 'InstalledApplication',
         'ScheduledTaskHealth', 'DefenderSignatureHealth', 'FileFreshness', 'CertificateExpiry',
-        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership'
+        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership',
+        'CimNamespaceExists', 'IpAddressInRange'
+    )
+    $allowedControlProperties = @(
+        'Id', 'Title', 'Description', 'WhyItMatters', 'HowChecked', 'WhatWouldChange',
+        'ManualAction', 'SafetyNotes', 'RecoveryGuidance', 'Type', 'Severity', 'DesiredValue',
+        'Remediable', 'RequiresReboot', 'Path', 'ValueName', 'ValueType', 'Name', 'StartupType',
+        'Status', 'Property', 'MountPoint', 'Text', 'TailLines', 'CaseSensitive', 'Encoding',
+        'LogName', 'ProviderName', 'EventIds', 'LookbackMinutes', 'MinimumCount', 'HostName',
+        'Port', 'TimeoutMilliseconds', 'Drive', 'MinimumFreePercent', 'MinimumFreeGB',
+        'MaximumCount', 'IncludeOptional', 'IncludeDrivers', 'TimeoutSeconds',
+        'ApplicationName', 'Publisher', 'ProductCode', 'Scope', 'Architecture', 'ExactVersion',
+        'MinimumVersion', 'TaskName', 'TaskPath', 'MaximumAgeMinutes', 'ExpectedLastTaskResult',
+        'RequireEnabled', 'MaximumAgeDays', 'StoreLocation', 'StoreName', 'Thumbprint',
+        'MinimumDaysRemaining', 'Uri', 'Method', 'ExpectedStatusCode', 'AllowRedirects',
+        'ProcessName', 'GroupName', 'MemberName', 'Namespace', 'ApprovedRanges', 'InterfaceName'
+    )
+    $cimNamespaceAllowedProperties = @(
+        'Id', 'Title', 'Description', 'WhyItMatters', 'HowChecked', 'WhatWouldChange',
+        'ManualAction', 'SafetyNotes', 'RecoveryGuidance', 'Type', 'Severity', 'DesiredValue',
+        'Remediable', 'RequiresReboot', 'Namespace', 'TimeoutSeconds'
+    )
+    $ipRangeAllowedProperties = @(
+        'Id', 'Title', 'Description', 'WhyItMatters', 'HowChecked', 'WhatWouldChange',
+        'ManualAction', 'SafetyNotes', 'RecoveryGuidance', 'Type', 'Severity', 'DesiredValue',
+        'Remediable', 'RequiresReboot', 'ApprovedRanges', 'InterfaceName', 'TimeoutSeconds'
     )
     $ids = @{}
     $networkControlCount = 0
     $windowsUpdateControlCount = 0
     $installedApplicationControlCount = 0
+    $cimNamespaceControlCount = 0
+    $ipRangeControlCount = 0
+    $controlIndex = 0
     foreach ($control in $controls) {
+        $controlIndex++
+        $controlPropertyNames = if ($control -is [Collections.IDictionary]) {
+            @($control.Keys | ForEach-Object { [string]$_ })
+        }
+        else {
+            @($control.PSObject.Properties.Name)
+        }
+        foreach ($controlPropertyName in $controlPropertyNames) {
+            & $assertSafeText $controlPropertyName "Checklist item $controlIndex property name"
+        }
+        $unsupportedProperties = @($controlPropertyNames | Where-Object { $_ -notin $allowedControlProperties })
+        if ($unsupportedProperties.Count -gt 0) {
+            throw [System.IO.InvalidDataException]::new(
+                "Checklist item $controlIndex contains unsupported checklist properties."
+            )
+        }
+
         $id = [string](Get-EFPropertyValue -InputObject $control -Name 'Id')
         $type = [string](Get-EFPropertyValue -InputObject $control -Name 'Type')
+        & $assertSafeText $id "Checklist item $controlIndex Id"
+        & $assertSafeText $type "Checklist item $controlIndex Type"
         if ([string]::IsNullOrWhiteSpace($id)) {
             throw [System.IO.InvalidDataException]::new("Baseline '$name' has a control without an Id.")
         }
         if ($id -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
-            throw [System.IO.InvalidDataException]::new("Control Id '$id' must contain only letters, numbers, dots, underscores, and hyphens.")
+            throw [System.IO.InvalidDataException]::new('Control Id must contain only letters, numbers, dots, underscores, and hyphens.')
         }
         if ($ids.ContainsKey($id)) {
             throw [System.IO.InvalidDataException]::new("Baseline '$name' contains duplicate control Id '$id'.")
         }
         $ids[$id] = $true
         if ($type -notin $supportedTypes) {
-            throw [System.IO.InvalidDataException]::new("Control '$id' uses unsupported Type '$type'.")
+            throw [System.IO.InvalidDataException]::new("Control '$id' uses an unsupported Type.")
         }
 
         $title = [string](Get-EFPropertyValue -InputObject $control -Name 'Title')
         $severity = [string](Get-EFPropertyValue -InputObject $control -Name 'Severity')
+        & $assertSafeText $title "Control '$id' Title"
+        & $assertSafeText $severity "Control '$id' Severity"
         if ([string]::IsNullOrWhiteSpace($title)) {
             throw [System.IO.InvalidDataException]::new("Control '$id' must define a Title.")
         }
         if ($severity -notin @('Low', 'Medium', 'High', 'Critical')) {
-            throw [System.IO.InvalidDataException]::new("Control '$id' has invalid Severity '$severity'.")
+            throw [System.IO.InvalidDataException]::new("Control '$id' has an invalid Severity.")
         }
         foreach ($textProperty in @(
             'Id', 'Title', 'Description', 'WhyItMatters', 'HowChecked', 'WhatWouldChange',
@@ -111,7 +199,8 @@ function Assert-EFBaseline {
             'LogName', 'ProviderName', 'HostName', 'Drive', 'ApplicationName', 'Publisher',
             'ProductCode', 'Scope', 'Architecture', 'ExactVersion', 'MinimumVersion',
             'TaskName', 'TaskPath', 'StoreLocation', 'StoreName', 'Thumbprint', 'Uri',
-            'Method', 'ProcessName', 'GroupName', 'MemberName'
+            'Method', 'ProcessName', 'GroupName', 'MemberName', 'Namespace', 'InterfaceName',
+            'ValueType', 'Encoding'
         )) {
             if (Test-EFPropertyPresent -InputObject $control -Name $textProperty) {
                 & $assertSafeText (Get-EFPropertyValue -InputObject $control -Name $textProperty) "Control '$id' $textProperty"
@@ -121,7 +210,8 @@ function Assert-EFBaseline {
             'Path', 'Text', 'LogName', 'ProviderName', 'HostName', 'Drive', 'ApplicationName',
             'Publisher', 'ProductCode', 'Scope', 'Architecture', 'ExactVersion', 'MinimumVersion',
             'TaskName', 'TaskPath', 'StoreLocation', 'StoreName', 'Thumbprint', 'Uri',
-            'Method', 'ProcessName', 'GroupName', 'MemberName'
+            'Method', 'ProcessName', 'GroupName', 'MemberName', 'Namespace', 'InterfaceName',
+            'ValueType', 'Encoding'
         )) {
             if ((Test-EFPropertyPresent -InputObject $control -Name $strictStringProperty) -and
                 (Get-EFPropertyValue -InputObject $control -Name $strictStringProperty) -isnot [string]) {
@@ -171,6 +261,8 @@ function Assert-EFBaseline {
             'HttpEndpointHealth'     { @('Uri') }
             'ProcessRunning'         { @('ProcessName') }
             'LocalGroupMembership'   { @('GroupName', 'MemberName') }
+            'CimNamespaceExists'     { @('Namespace') }
+            'IpAddressInRange'       { @('ApprovedRanges') }
             default                  { @() }
         }
         foreach ($requiredProperty in $requiredByType) {
@@ -186,10 +278,10 @@ function Assert-EFBaseline {
                 throw [System.IO.InvalidDataException]::new("Service control '$id' must define StartupType, Status, or both.")
             }
             if (-not [string]::IsNullOrWhiteSpace($startupType) -and $startupType -notin @('Automatic', 'Manual', 'Disabled')) {
-                throw [System.IO.InvalidDataException]::new("Service control '$id' has invalid StartupType '$startupType'.")
+                throw [System.IO.InvalidDataException]::new("Service control '$id' has an invalid StartupType.")
             }
             if (-not [string]::IsNullOrWhiteSpace($serviceStatus) -and $serviceStatus -notin @('Running', 'Stopped')) {
-                throw [System.IO.InvalidDataException]::new("Service control '$id' has invalid Status '$serviceStatus'.")
+                throw [System.IO.InvalidDataException]::new("Service control '$id' has an invalid Status.")
             }
         }
 
@@ -219,7 +311,7 @@ function Assert-EFBaseline {
             }
             $valueType = [string](Get-EFPropertyValue -InputObject $control -Name 'ValueType' -Default 'String')
             if ($valueType -notin @('String', 'ExpandString', 'Binary', 'DWord', 'MultiString', 'QWord')) {
-                throw [System.IO.InvalidDataException]::new("Registry control '$id' has unsupported ValueType '$valueType'.")
+                throw [System.IO.InvalidDataException]::new("Registry control '$id' has an unsupported ValueType.")
             }
             $isNumeric = $desiredValue -is [byte] -or $desiredValue -is [sbyte] -or
                 $desiredValue -is [int16] -or $desiredValue -is [uint16] -or
@@ -615,6 +707,117 @@ function Assert-EFBaseline {
                 [decimal]$timeoutSeconds -gt 60) {
                 throw [System.IO.InvalidDataException]::new(
                     "Control '$id' TimeoutSeconds must be a whole number from 10 through 60."
+                )
+            }
+        }
+        if ($type -eq 'IpAddressInRange') {
+            $ipRangeControlCount++
+            if ($ipRangeControlCount -gt 16) {
+                throw [System.IO.InvalidDataException]::new(
+                    'A checklist cannot contain more than 16 IpAddressInRange items.'
+                )
+            }
+
+            $unrelatedProperties = @(
+                $controlPropertyNames | Where-Object { $_ -notin $ipRangeAllowedProperties }
+            )
+            if ($unrelatedProperties.Count -gt 0) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' of type IpAddressInRange does not accept properties for another checklist item type: $($unrelatedProperties -join ', ')."
+                )
+            }
+
+            $rangeValue = $null
+            if ($control -is [Collections.IDictionary]) {
+                $rangeValue = $control['ApprovedRanges']
+            }
+            else {
+                $rangeValue = $control.PSObject.Properties['ApprovedRanges'].Value
+            }
+            if ($rangeValue -is [string] -or $rangeValue -isnot [Collections.IEnumerable]) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' ApprovedRanges must be a JSON array containing from 1 through 32 CIDR network ranges."
+                )
+            }
+            $approvedRanges = @($rangeValue)
+            if ($approvedRanges.Count -lt 1 -or $approvedRanges.Count -gt 32) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' ApprovedRanges must contain from 1 through 32 CIDR network ranges."
+                )
+            }
+            $seenNetworks = [Collections.Generic.HashSet[string]]::new(
+                [StringComparer]::Ordinal
+            )
+            for ($rangeIndex = 0; $rangeIndex -lt $approvedRanges.Count; $rangeIndex++) {
+                if ($approvedRanges[$rangeIndex] -isnot [string]) {
+                    throw [System.IO.InvalidDataException]::new(
+                        "Control '$id' ApprovedRanges item $($rangeIndex + 1) must be a JSON string."
+                    )
+                }
+                try {
+                    $network = ConvertTo-EFIpNetwork -Cidr ([string]$approvedRanges[$rangeIndex])
+                }
+                catch {
+                    throw [System.IO.InvalidDataException]::new(
+                        "Control '$id' ApprovedRanges item $($rangeIndex + 1) is not a supported network range: $($_.Exception.Message)"
+                    )
+                }
+                if (-not $seenNetworks.Add([string]$network.CanonicalKey)) {
+                    throw [System.IO.InvalidDataException]::new(
+                        "Control '$id' ApprovedRanges contains the same network more than once."
+                    )
+                }
+            }
+
+            if (Test-EFPropertyPresent -InputObject $control -Name 'InterfaceName') {
+                $interfaceName = [string](Get-EFPropertyValue -InputObject $control -Name 'InterfaceName')
+                if ([string]::IsNullOrWhiteSpace($interfaceName) -or $interfaceName.Length -gt 256 -or
+                    $interfaceName -ne $interfaceName.Trim() -or
+                    [System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters($interfaceName)) {
+                    throw [System.IO.InvalidDataException]::new(
+                        "Control '$id' InterfaceName must be one exact local network connection name from 1 through 256 characters, without leading or trailing whitespace or wildcards."
+                    )
+                }
+            }
+
+            $timeoutSeconds = Get-EFPropertyValue -InputObject $control -Name 'TimeoutSeconds' -Default 10
+            if (-not (& $testInteger $timeoutSeconds) -or [decimal]$timeoutSeconds -lt 1 -or
+                [decimal]$timeoutSeconds -gt 30) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' TimeoutSeconds must be a whole number from 1 through 30."
+                )
+            }
+        }
+        if ($type -eq 'CimNamespaceExists') {
+            $cimNamespaceControlCount++
+            if ($cimNamespaceControlCount -gt 32) {
+                throw [System.IO.InvalidDataException]::new(
+                    'A checklist cannot contain more than 32 CimNamespaceExists items.'
+                )
+            }
+
+            $unrelatedProperties = @(
+                $controlPropertyNames | Where-Object { $_ -notin $cimNamespaceAllowedProperties }
+            )
+            if ($unrelatedProperties.Count -gt 0) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' of type CimNamespaceExists does not accept properties for another checklist item type: $($unrelatedProperties -join ', ')."
+                )
+            }
+
+            $namespace = [string](Get-EFPropertyValue -InputObject $control -Name 'Namespace')
+            $namespacePattern = '^(?i:root)(?:\\[A-Za-z][A-Za-z0-9_]{0,127}){0,15}$'
+            if ($namespace.Length -gt 2048 -or $namespace -notmatch $namespacePattern) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' Namespace must be root or one exact local path below root. Each segment must begin with a letter and contain only letters, numbers, or underscores; server names, colons, slashes, spaces, wildcards, dot segments, and trailing separators are not allowed."
+                )
+            }
+
+            $timeoutSeconds = Get-EFPropertyValue -InputObject $control -Name 'TimeoutSeconds' -Default 10
+            if (-not (& $testInteger $timeoutSeconds) -or [decimal]$timeoutSeconds -lt 1 -or
+                [decimal]$timeoutSeconds -gt 30) {
+                throw [System.IO.InvalidDataException]::new(
+                    "Control '$id' TimeoutSeconds must be a whole number from 1 through 30."
                 )
             }
         }

@@ -26,6 +26,12 @@ function Export-EFEndpointReport {
     .PARAMETER AsArray
     Always writes a JSON array, including when the pipeline contains one object.
 
+    .PARAMETER AllowUnsafeCsvFormulaValues
+    Disables the default protection that prefixes spreadsheet formula characters in CSV
+    text cells and column names. Use only when the CSV will never be opened by spreadsheet
+    software and preserving the original leading characters is required. This switch is
+    rejected for non-CSV reports.
+
     .PARAMETER Force
     Overwrites an existing report.
 
@@ -41,6 +47,11 @@ function Export-EFEndpointReport {
     .EXAMPLE
     Get-EFEndpointSummary -NoProgress | Export-EFEndpointReport -Path .\computer-check.html
 
+    .EXAMPLE
+    $data | Export-EFEndpointReport -Path .\raw-data.csv -AllowUnsafeCsvFormulaValues
+
+    Exports original leading formula characters for a trusted non-spreadsheet consumer.
+
     .OUTPUTS
     System.IO.FileInfo when PassThru is specified.
 
@@ -48,6 +59,7 @@ function Export-EFEndpointReport {
     Get-EFEndpointSummary
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Low')]
+    [OutputType([System.IO.FileInfo])]
     param(
         [Parameter(Mandatory, ValueFromPipeline)]
         [AllowNull()]
@@ -64,6 +76,8 @@ function Export-EFEndpointReport {
         [int]$Depth = 12,
 
         [switch]$AsArray,
+
+        [switch]$AllowUnsafeCsvFormulaValues,
 
         [switch]$Force,
 
@@ -108,6 +122,9 @@ function Export-EFEndpointReport {
         if ($AsArray -and $effectiveFormat -ne 'Json') {
             throw [System.ArgumentException]::new('AsArray is supported only for JSON reports.')
         }
+        if ($AllowUnsafeCsvFormulaValues -and $effectiveFormat -ne 'Csv') {
+            throw [System.ArgumentException]::new('AllowUnsafeCsvFormulaValues is supported only for CSV reports.')
+        }
         $containsNull = $false
         foreach ($reportItem in $items) {
             if ($null -eq $reportItem) { $containsNull = $true; break }
@@ -131,37 +148,65 @@ function Export-EFEndpointReport {
 
         $output = if ($items.Count -eq 1 -and -not $AsArray) { $items[0] } else { @($items) }
         $utf8WithoutBom = [Text.UTF8Encoding]::new($false)
-        switch ($effectiveFormat) {
-            'Html' {
-                $html = ConvertTo-EFHtmlReport -InputObject $items.ToArray() -Title 'EndpointForge computer report'
-                [IO.File]::WriteAllText($resolvedPath, $html, $utf8WithoutBom)
-            }
-            'Json' {
-                if ($AsArray) {
-                    $serializableItems = [Collections.Generic.List[object]]::new()
-                    foreach ($item in $items) {
-                        if ($null -eq $item) {
-                            $serializableItems.Add($null)
+        $temporaryPath = Join-Path $parent (
+            ".{0}.{1}.tmp" -f [IO.Path]::GetFileName($resolvedPath), [guid]::NewGuid().ToString('N')
+        )
+        $backupPath = Join-Path $parent (
+            ".{0}.{1}.bak" -f [IO.Path]::GetFileName($resolvedPath), [guid]::NewGuid().ToString('N')
+        )
+        try {
+            switch ($effectiveFormat) {
+                'Html' {
+                    $html = ConvertTo-EFHtmlReport -InputObject $items.ToArray() -Title 'EndpointForge computer report'
+                    [IO.File]::WriteAllText($temporaryPath, $html, $utf8WithoutBom)
+                }
+                'Json' {
+                    if ($AsArray) {
+                        $serializableItems = [Collections.Generic.List[object]]::new()
+                        foreach ($item in $items) {
+                            if ($null -eq $item) {
+                                $serializableItems.Add($null)
+                            }
+                            else {
+                                $serializableItems.Add((ConvertTo-EFSerializableValue -InputObject $item))
+                            }
                         }
-                        else {
-                            $serializableItems.Add((ConvertTo-EFSerializableValue -InputObject $item))
-                        }
+                        $json = ConvertTo-Json -InputObject $serializableItems.ToArray() -Depth $Depth
                     }
-                    $json = ConvertTo-Json -InputObject $serializableItems.ToArray() -Depth $Depth
+                    else {
+                        $serializableOutput = ConvertTo-EFSerializableValue -InputObject $output
+                        $json = if ($null -eq $output) { 'null' } else { ConvertTo-Json -InputObject $serializableOutput -Depth $Depth }
+                    }
+                    [IO.File]::WriteAllText($temporaryPath, $json, $utf8WithoutBom)
                 }
-                else {
-                    $serializableOutput = ConvertTo-EFSerializableValue -InputObject $output
-                    $json = if ($null -eq $output) { 'null' } else { ConvertTo-Json -InputObject $serializableOutput -Depth $Depth }
+                'Csv' {
+                    $csv = @($items | ForEach-Object {
+                        ConvertTo-EFFlatRecord -InputObject $_ -AllowUnsafeCsvFormulaValues:$AllowUnsafeCsvFormulaValues
+                    }) |
+                        ConvertTo-Csv -NoTypeInformation
+                    [IO.File]::WriteAllLines($temporaryPath, [string[]]$csv, $utf8WithoutBom)
                 }
-                [IO.File]::WriteAllText($resolvedPath, $json, $utf8WithoutBom)
+                'Clixml' {
+                    $output | Export-Clixml -LiteralPath $temporaryPath -Depth $Depth -Force -ErrorAction Stop
+                }
             }
-            'Csv' {
-                $csv = @($items | ForEach-Object { ConvertTo-EFFlatRecord -InputObject $_ }) |
-                    ConvertTo-Csv -NoTypeInformation
-                [IO.File]::WriteAllLines($resolvedPath, [string[]]$csv, $utf8WithoutBom)
+
+            if (Test-Path -LiteralPath $resolvedPath -PathType Leaf) {
+                # Windows PowerShell 5.1/.NET Framework rejects a null backup path
+                # even though newer runtimes accept it. A same-directory backup keeps
+                # replacement atomic across both supported PowerShell generations.
+                [IO.File]::Replace($temporaryPath, $resolvedPath, $backupPath, $true)
             }
-            'Clixml' {
-                $output | Export-Clixml -LiteralPath $resolvedPath -Depth $Depth -Force:$Force -ErrorAction Stop
+            else {
+                [IO.File]::Move($temporaryPath, $resolvedPath)
+            }
+        }
+        finally {
+            if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
+                Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+                Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
             }
         }
 

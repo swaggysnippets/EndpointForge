@@ -10,7 +10,8 @@ BeforeAll {
     $script:ExpandedTypes = @(
         'PendingRestart', 'DiskSpace', 'WindowsUpdateAvailable', 'InstalledApplication',
         'ScheduledTaskHealth', 'DefenderSignatureHealth', 'FileFreshness', 'CertificateExpiry',
-        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership'
+        'DnsResolution', 'HttpEndpointHealth', 'ProcessRunning', 'LocalGroupMembership',
+        'CimNamespaceExists', 'IpAddressInRange'
     )
     $script:CopyTestValue = {
         param([Parameter(Mandatory)][object]$Value)
@@ -56,7 +57,7 @@ Describe 'Expanded checklist contracts' {
         $validation = Test-EFBaseline -InputObject $script:ExpandedChecklist -PassThru
 
         $validation.IsValid | Should -BeTrue
-        $validation.ControlCount | Should -Be 16
+        $validation.ControlCount | Should -Be 18
         foreach ($type in $script:ExpandedTypes) {
             $control = $script:ExpandedChecklist.Controls | Where-Object Type -eq $type
             @($control).Count | Should -Be 1 -Because "$type should have one maintained example"

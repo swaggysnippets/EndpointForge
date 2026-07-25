@@ -7,6 +7,8 @@ $script:EFConfiguration = [ordered]@{
     RetryCount        = 2
     RetryDelaySeconds = 2
 }
+$script:EFBaselineIntegrityApprovals =
+    [System.Runtime.CompilerServices.ConditionalWeakTable[object, object]]::new()
 
 $privateFiles = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Private') -Filter '*.ps1' -File |
     Sort-Object -Property Name

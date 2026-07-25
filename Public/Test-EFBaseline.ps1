@@ -5,8 +5,8 @@ function Test-EFBaseline {
 
     .DESCRIPTION
     A checklist is a list of things expected to be true, such as Windows settings,
-    storage, applications, jobs, files, certificates, recent events, and approved network
-    services; scripts call it a baseline. This command checks the file structure, item IDs,
+    storage, applications, jobs, files, certificates, recent events, local Windows
+    management information, local network placement, and approved network services; scripts call it a baseline. This command checks the file structure, item IDs,
     value types, supported-fix safety, and type-specific requirements. It does not run any
     item or contact a service. Validation confirms safe input shape, not organizational
     authorization. It returns True or False by default. PassThru returns detailed results.
@@ -34,6 +34,8 @@ function Test-EFBaseline {
     EndpointForge.BaselineValidation when PassThru is specified.
     #>
     [CmdletBinding(DefaultParameterSetName = 'Name')]
+    [OutputType([bool])]
+    [OutputType('EndpointForge.BaselineValidation')]
     param(
         [Parameter(ParameterSetName = 'Name')]
         [ValidateNotNullOrEmpty()]

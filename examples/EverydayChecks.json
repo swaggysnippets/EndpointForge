@@ -1,5 +1,6 @@
 {
   "$schema": "../Data/Baseline.schema.json",
+  "FormatVersion": "1.0",
   "Name": "Contoso.EverydayChecks",
   "Version": "2.0.0",
   "Description": "Editable examples for everyday computer health, applications, jobs, files, logs, certificates, access, and approved network checks. Replace every Contoso sample before use.",
@@ -290,6 +291,24 @@
       "RequiresReboot": false
     },
     {
+      "Id": "WINDOWS-MANAGEMENT-AREA",
+      "Title": "Core Windows management information is available",
+      "Description": "Checks whether Windows can open its standard root\\cimv2 management information area.",
+      "WhyItMatters": "Many inventory, monitoring, and management tools depend on this Windows information area.",
+      "HowChecked": "EndpointForge performs a time-limited local CIM query for each exact namespace segment. It does not run command text from the checklist, contact another computer, or return WMI classes, instances, or property values.",
+      "WhatWouldChange": "Nothing. EndpointForge checks the named local management information area without calling methods or changing provider data.",
+      "ManualAction": "Confirm the namespace spelling, try the check with your organization's approved permissions, and repair the related Windows component or management agent through its supported process.",
+      "SafetyNotes": "Use an exact path beginning with root. A missing namespace is different from a namespace that Windows would not permit this account to read; EndpointForge reports access and provider failures as Could not check.",
+      "RecoveryGuidance": "EndpointForge makes no change, so there is nothing to undo.",
+      "Type": "CimNamespaceExists",
+      "Severity": "High",
+      "Namespace": "root\\cimv2",
+      "TimeoutSeconds": 10,
+      "DesiredValue": true,
+      "Remediable": false,
+      "RequiresReboot": false
+    },
+    {
       "Id": "APP-LOCAL-GROUP-MEMBER",
       "Title": "The approved support account is in the application operators group",
       "Description": "Checks one exact direct membership in one exact local group.",
@@ -304,6 +323,27 @@
       "GroupName": "Contoso App Operators",
       "MemberName": "CONTOSO\\Endpoint Operators",
       "TimeoutSeconds": 15,
+      "DesiredValue": true,
+      "Remediable": false,
+      "RequiresReboot": false
+    },
+    {
+      "Id": "APPROVED-IP-RANGE",
+      "Title": "The computer is on an approved IP range",
+      "Description": "Checks whether any active local network connection has an address in one configured range.",
+      "WhyItMatters": "Expected network placement can be required before a computer uses organizational services.",
+      "HowChecked": "EndpointForge reads active local network connection state in a time-limited worker and checks address membership without contacting DNS, a gateway, or another service.",
+      "WhatWouldChange": "Nothing. EndpointForge does not change network connections, addresses, VPNs, routes, DNS, DHCP, or firewall settings.",
+      "ManualAction": "Confirm the intended ranges with the network team, then review the connection, VPN, DHCP, and routing configuration through approved tools.",
+      "SafetyNotes": "Replace both documentation-only ranges. When InterfaceName is omitted, any active physical, virtual, or VPN connection can satisfy the item. A match proves only local address membership, not connectivity, identity, location, trust, or which route traffic will use. Generated evidence does not copy detected addresses or ApprovedRanges values; author-provided text remains visible.",
+      "RecoveryGuidance": "EndpointForge makes no change, so there is nothing to undo.",
+      "Type": "IpAddressInRange",
+      "Severity": "High",
+      "ApprovedRanges": [
+        "192.0.2.0/24",
+        "2001:db8::/32"
+      ],
+      "TimeoutSeconds": 10,
       "DesiredValue": true,
       "Remediable": false,
       "RequiresReboot": false

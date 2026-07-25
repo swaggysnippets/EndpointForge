@@ -4,6 +4,9 @@ param(
 
     [switch]$RequireSignature,
 
+    [ValidatePattern('^[A-Fa-f0-9]{40}$')]
+    [string]$ExpectedSignerThumbprint,
+
     [switch]$CheckGalleryName
 )
 
@@ -36,8 +39,9 @@ if ([string]::IsNullOrWhiteSpace([string]$manifestData.CompanyName) -or
 if ([string]::IsNullOrWhiteSpace([string]$psData.ProjectUri) -or [string]$psData.ProjectUri -notmatch '^https://') {
     $errors.Add('PSData.ProjectUri must be the HTTPS URL of the public source and support repository.')
 }
-if ([string]::IsNullOrWhiteSpace([string]$manifestData.HelpInfoURI) -or [string]$manifestData.HelpInfoURI -notmatch '^https://') {
-    $errors.Add('HelpInfoURI must be an HTTPS documentation URL.')
+if (-not [string]::IsNullOrWhiteSpace([string]$manifestData.HelpInfoURI) -and
+    [string]$manifestData.HelpInfoURI -notmatch '^https://') {
+    $errors.Add('HelpInfoURI, when present, must be an HTTPS updatable-help metadata URL.')
 }
 if ([string]::IsNullOrWhiteSpace([string]$psData.LicenseUri) -or [string]$psData.LicenseUri -notmatch '^https://') {
     $errors.Add('PSData.LicenseUri must be an HTTPS license URL.')
@@ -105,12 +109,37 @@ $signableFiles = @($stagedFiles | Where-Object Extension -in '.ps1', '.psm1', '.
 $signatureResults = @($signableFiles | ForEach-Object { Get-AuthenticodeSignature -LiteralPath $_.FullName })
 $unsignedCount = @($signatureResults | Where-Object Status -eq 'NotSigned').Count
 $invalidSignatureCount = @($signatureResults | Where-Object Status -notin @('Valid', 'NotSigned')).Count
+$timestampedCount = @($signatureResults | Where-Object {
+    $_.Status -eq 'Valid' -and $null -ne $_.TimeStamperCertificate
+}).Count
+$missingTimestampCount = @($signatureResults | Where-Object {
+    $_.Status -eq 'Valid' -and $null -eq $_.TimeStamperCertificate
+}).Count
 if ($invalidSignatureCount -gt 0) {
     $errors.Add("$invalidSignatureCount staged file(s) have an invalid or untrusted Authenticode signature.")
 }
 if ($unsignedCount -gt 0) {
     $message = "$unsignedCount staged PowerShell file(s) are not Authenticode signed."
     if ($RequireSignature) { $errors.Add($message) } else { $warnings.Add($message) }
+}
+if ($missingTimestampCount -gt 0) {
+    $message = "$missingTimestampCount signed PowerShell file(s) do not contain trusted timestamp evidence."
+    if ($RequireSignature) { $errors.Add($message) } else { $warnings.Add($message) }
+}
+$unexpectedSignerCount = 0
+if (-not [string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+    $normalizedExpectedSigner = $ExpectedSignerThumbprint.ToUpperInvariant()
+    $unexpectedSignerCount = @($signatureResults | Where-Object {
+        $_.Status -eq 'Valid' -and
+        ($null -eq $_.SignerCertificate -or
+            ([string]$_.SignerCertificate.Thumbprint).ToUpperInvariant() -cne $normalizedExpectedSigner)
+    }).Count
+    if ($unexpectedSignerCount -gt 0) {
+        $errors.Add("$unexpectedSignerCount staged file(s) were not signed by the expected publisher certificate.")
+    }
+}
+elseif ($RequireSignature) {
+    $errors.Add('ExpectedSignerThumbprint is required when RequireSignature is used.')
 }
 if ([version]$manifest.Version -lt [version]'1.0.0') {
     $warnings.Add("Version $($manifest.Version) is a pre-1.0 release and should be described as preview quality.")
@@ -139,7 +168,11 @@ $result = [pscustomobject]@{
     ExportedCommands = @($manifest.ExportedFunctions.Keys).Count
     StagedFiles      = $stagedFiles.Count
     SignedFiles      = @($signatureResults | Where-Object Status -eq 'Valid').Count
+    TimestampedFiles = $timestampedCount
+    MissingTimestampFiles = $missingTimestampCount
     UnsignedFiles    = $unsignedCount
+    UnexpectedSignerFiles = $unexpectedSignerCount
+    ExpectedSignerThumbprint = $ExpectedSignerThumbprint
     ErrorCount       = $errors.Count
     WarningCount     = $warnings.Count
     Errors           = @($errors)

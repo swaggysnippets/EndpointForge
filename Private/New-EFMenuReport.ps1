@@ -20,6 +20,8 @@ function New-EFMenuReport {
         [AllowNull()][object]$Preview,
         [AllowNull()][object]$Remediation,
         [AllowNull()][object]$Fleet,
+        [object[]]$ManagementHealth = @(),
+        [AllowNull()][object]$ManagementAction,
         [object[]]$History = @()
     )
 
@@ -38,7 +40,7 @@ function New-EFMenuReport {
 
     [pscustomobject][ordered]@{
         PSTypeName          = 'EndpointForge.MenuReport'
-        SchemaVersion       = '1.1'
+        SchemaVersion       = '1.2'
         ExportedAtUtc       = [DateTime]::UtcNow
         ComputerName        = $ComputerName
         ChecklistName       = [string](Get-EFPropertyValue $Checklist 'Name' '')
@@ -70,6 +72,8 @@ function New-EFMenuReport {
         Preview             = $Preview
         Remediation         = $Remediation
         Fleet               = $Fleet
+        ManagementHealth    = @($ManagementHealth)
+        ManagementAction    = $ManagementAction
         SessionHistory      = @($History)
     }
 }

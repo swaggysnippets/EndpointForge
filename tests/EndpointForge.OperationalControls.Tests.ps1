@@ -15,7 +15,7 @@ Describe 'Everyday checklist validation' {
             -Raw -Encoding UTF8 | ConvertFrom-Json
     }
 
-    It 'validates all sixteen report-only everyday item types' {
+    It 'validates all eighteen report-only everyday item types' {
         InModuleScope EndpointForge -Parameters @{ Candidate = $script:EverydayBaseline } {
             { Assert-EFBaseline -Baseline $Candidate } | Should -Not -Throw
             @($Candidate.Controls.Type) | Should -Contain 'FileExists'
@@ -34,7 +34,9 @@ Describe 'Everyday checklist validation' {
             @($Candidate.Controls.Type) | Should -Contain 'HttpEndpointHealth'
             @($Candidate.Controls.Type) | Should -Contain 'ProcessRunning'
             @($Candidate.Controls.Type) | Should -Contain 'LocalGroupMembership'
-            @($Candidate.Controls).Count | Should -Be 16
+            @($Candidate.Controls.Type) | Should -Contain 'CimNamespaceExists'
+            @($Candidate.Controls.Type) | Should -Contain 'IpAddressInRange'
+            @($Candidate.Controls).Count | Should -Be 18
             @($Candidate.Controls | Where-Object Remediable).Count | Should -Be 0
         }
     }
@@ -56,7 +58,7 @@ Describe 'Everyday checklist validation' {
         $result = New-EFBaseline -Name 'Contoso.Operations' -Template EverydayChecks -Path $path
 
         $result.Template | Should -Be 'EverydayChecks'
-        $result.ControlCount | Should -Be 16
+        $result.ControlCount | Should -Be 18
         $result.NextSteps[0] | Should -Match 'Replace every sample'
         (Test-EFBaseline -Path $path) | Should -BeTrue
     }
@@ -473,14 +475,15 @@ Describe 'TCP port checklist items' {
 }
 
 Describe 'Everyday control readiness and fleet safety' {
-    It 'describes all sixteen checks in everyday words and offers no automatic fixes' {
+    It 'describes all eighteen checks in everyday words and offers no automatic fixes' {
         $readiness = Get-EFEndpointReadiness -Baseline $script:EverydayBaseline
 
         $readiness.NetworkCheckCount | Should -Be 5
-        @($readiness.ControlCapabilities).Count | Should -Be 16
+        @($readiness.ControlCapabilities).Count | Should -Be 18
         @($readiness.ControlCapabilities | Where-Object FixStatus -ne 'NotOffered').Count | Should -Be 0
         ($readiness.ControlCapabilities | Where-Object Type -eq 'TcpPort').HowChecked | Should -Match 'one time-limited TCP connection'
         ($readiness.ControlCapabilities | Where-Object Type -eq 'WindowsEvent').HowChecked | Should -Match 'Event messages.*never returned'
+        ($readiness.ControlCapabilities | Where-Object Type -eq 'IpAddressInRange').HowChecked | Should -Match 'does not contact DNS'
     }
 
     It 'blocks fleet fan-out until network checks are explicitly allowed' {
@@ -526,7 +529,8 @@ Describe 'Everyday checks in the guided menu' {
         $text | Should -Match 'required files'
         $text | Should -Match 'text near\s+the end of a log'
         $text | Should -Match 'Windows event IDs'
-        $text | Should -Match 'network connection examples'
+        $text | Should -Match 'network\s+connection\s+examples'
+        $text | Should -Match 'local management\s+namespaces'
         $text | Should -Match 'fictional Contoso targets'
         $text | Should -Match 'edited before they are run'
     }

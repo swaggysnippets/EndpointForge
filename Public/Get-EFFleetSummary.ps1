@@ -12,7 +12,9 @@ function Get-EFFleetSummary {
     AllowNetworkChecks is supplied.
 
     Each remote computer must already allow PowerShell remoting and must already have
-    EndpointForge 0.6.0 or later installed. Your account must have permission to connect.
+    a contract-compatible EndpointForge 0.8.0 or later installed. Your account must have
+    permission to connect. EndpointForge 1.x requires a 1.x remote module and summary
+    schema 1.0 so incompatible results cannot be presented as trustworthy.
     These requirements are intentionally not changed for you.
 
     EndpointForge calls its list of expected settings and everyday checks a baseline in
@@ -20,7 +22,8 @@ function Get-EFFleetSummary {
     Matching log lines, event messages, and event data are not included in fleet results.
 
     .PARAMETER ComputerName
-    One or more computer names to check. Duplicate names are checked once.
+    One through 256 computer names to check. Duplicate names are checked once. Names must
+    be exact host names or IP addresses; wildcards and paths are not accepted.
 
     .PARAMETER Baseline
     The checklist to use. Supply the built-in checklist name, a checklist JSON file, or a
@@ -72,6 +75,7 @@ function Get-EFFleetSummary {
     Get-EFEndpointSummary
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.FleetSummary')]
     param(
         [Parameter(Mandatory, Position = 0)]
         [ValidateNotNullOrEmpty()]
@@ -83,7 +87,7 @@ function Get-EFFleetSummary {
 
         [pscredential]$Credential,
 
-        [ValidateRange(1, 128)]
+        [ValidateRange(1, 64)]
         [int]$ThrottleLimit = 16,
 
         [switch]$IncludeSoftware,
@@ -105,6 +109,21 @@ function Get-EFFleetSummary {
         if ([string]::IsNullOrWhiteSpace($trimmedName)) {
             throw [System.ArgumentException]::new('ComputerName cannot contain an empty value.')
         }
+        $parsedAddress = $null
+        $isIpAddress = [Net.IPAddress]::TryParse($trimmedName, [ref]$parsedAddress)
+        $hostLabels = @($trimmedName -split '\.')
+        $isHostName = $trimmedName.Length -le 253 -and
+            $hostLabels.Count -gt 0 -and
+            @($hostLabels | Where-Object {
+                $_.Length -lt 1 -or $_.Length -gt 63 -or
+                $_ -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$'
+            }).Count -eq 0
+        if ((-not $isIpAddress -and -not $isHostName) -or
+            [System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters($trimmedName)) {
+            throw [System.ArgumentException]::new(
+                "ComputerName '$trimmedName' must be one exact host name or IP address no longer than 255 characters, without whitespace, a path, or wildcard."
+            )
+        }
         if ($seenTargets.Add($trimmedName)) {
             $targets.Add($trimmedName)
         }
@@ -112,8 +131,27 @@ function Get-EFFleetSummary {
     if ($targets.Count -eq 0) {
         throw [System.ArgumentException]::new('Provide at least one computer name.')
     }
+    if ($targets.Count -gt 256) {
+        throw [System.ArgumentException]::new(
+            'A fleet check is limited to 256 unique computers. Split a larger inventory into reviewed batches.'
+        )
+    }
 
     $resolvedBaseline = Resolve-EFBaseline -Baseline $Baseline
+    $localModuleVersion = [version]$MyInvocation.MyCommand.Module.Version
+    $requiredContractMajor = $localModuleVersion.Major
+    $fleetBaselineProperties = [ordered]@{}
+    if (Test-EFPropertyPresent -InputObject $resolvedBaseline -Name '$schema') {
+        $fleetBaselineProperties['$schema'] = Get-EFPropertyValue -InputObject $resolvedBaseline -Name '$schema'
+    }
+    $fleetBaselineProperties.FormatVersion = [string](
+        Get-EFPropertyValue -InputObject $resolvedBaseline -Name 'FormatVersion' -Default '1.0'
+    )
+    $fleetBaselineProperties.Name = [string]$resolvedBaseline.Name
+    $fleetBaselineProperties.Version = [string]$resolvedBaseline.Version
+    $fleetBaselineProperties.Description = [string]$resolvedBaseline.Description
+    $fleetBaselineProperties.Controls = @($resolvedBaseline.Controls)
+    $fleetBaseline = [pscustomobject]$fleetBaselineProperties
     $networkControls = @($resolvedBaseline.Controls | Where-Object { Test-EFControlUsesNetwork -Control $_ })
     if ($networkControls.Count -gt 0 -and -not $AllowNetworkChecks) {
         $networkTypes = @($networkControls.Type | Sort-Object -Unique) -join ', '
@@ -125,9 +163,19 @@ function Get-EFFleetSummary {
     }
     $startedAtUtc = [DateTime]::UtcNow
     $remoteScript = {
-        param($Checklist, $CollectSoftware, $FreeSpaceThreshold, $UptimeThreshold, $PermitNetworkChecks)
+        param(
+            $Checklist,
+            $CollectSoftware,
+            $FreeSpaceThreshold,
+            $UptimeThreshold,
+            $PermitNetworkChecks,
+            $ExpectedContractMajor
+        )
 
-        Import-Module EndpointForge -MinimumVersion 0.6.0 -Force -ErrorAction Stop
+        $remoteModule = Import-Module EndpointForge -MinimumVersion 0.8.0 -Force -PassThru -ErrorAction Stop
+        if ([int]$ExpectedContractMajor -ge 1 -and $remoteModule.Version.Major -ne [int]$ExpectedContractMajor) {
+            throw "Remote EndpointForge $($remoteModule.Version) is not compatible with the required $ExpectedContractMajor.x contract."
+        }
         $parameters = @{
             Baseline                = $Checklist
             IncludeSoftware         = [bool]$CollectSoftware
@@ -137,16 +185,29 @@ function Get-EFFleetSummary {
             AllowNetworkChecks      = [bool]$PermitNetworkChecks
         }
         $checkup = Get-EFEndpointSummary @parameters
+        $summarySchemaVersion = [string]$checkup.SchemaVersion
+        if ([int]$ExpectedContractMajor -ge 1 -and $summarySchemaVersion -ne '1.0') {
+            throw "Remote EndpointForge returned summary schema '$summarySchemaVersion'; schema 1.0 is required."
+        }
         [pscustomobject]@{
-            RemoteComputerName = $env:COMPUTERNAME
-            Checkup            = $checkup
+            RemoteComputerName  = $env:COMPUTERNAME
+            RemoteModuleVersion = $remoteModule.Version.ToString()
+            SummarySchemaVersion = $summarySchemaVersion
+            Checkup             = $checkup
         }
     }
 
     $invokeParameters = @{
         ComputerName  = $targets.ToArray()
         ScriptBlock   = $remoteScript
-        ArgumentList  = @($resolvedBaseline, [bool]$IncludeSoftware, $MinimumFreeSpacePercent, $MaximumUptimeDays, [bool]$AllowNetworkChecks)
+        ArgumentList  = @(
+            $fleetBaseline,
+            [bool]$IncludeSoftware,
+            $MinimumFreeSpacePercent,
+            $MaximumUptimeDays,
+            [bool]$AllowNetworkChecks,
+            $requiredContractMajor
+        )
         ThrottleLimit = $ThrottleLimit
         ErrorAction   = 'SilentlyContinue'
         ErrorVariable = 'fleetRemoteErrors'
@@ -189,6 +250,10 @@ function Get-EFFleetSummary {
             Score                 = Get-EFPropertyValue -InputObject $checkup -Name 'Score'
             IssueCount            = [int](Get-EFPropertyValue -InputObject $checkup -Name 'IssueCount' -Default 0)
             UnknownCount          = [int](Get-EFPropertyValue -InputObject $checkup -Name 'UnknownCount' -Default 0)
+            RemoteModuleVersion   = [string](Get-EFPropertyValue -InputObject $response -Name 'RemoteModuleVersion' -Default 'NotReported')
+            SummarySchemaVersion  = [string](Get-EFPropertyValue -InputObject $response -Name 'SummarySchemaVersion' -Default (
+                Get-EFPropertyValue -InputObject $checkup -Name 'SchemaVersion' -Default 'NotReported'
+            ))
             CompletedAtUtc        = Get-EFPropertyValue -InputObject $checkup -Name 'CompletedAtUtc'
             NextStep              = [string](Get-EFPropertyValue -InputObject $checkup -Name 'NextStep' -Default '')
             Checkup               = $checkup
@@ -209,7 +274,7 @@ function Get-EFFleetSummary {
             [string]$matchingErrors[0].Exception.Message
         }
         else {
-                'The computer did not return a checkup. Confirm its name, network access, PowerShell remoting permission, and that EndpointForge 0.6.0 or later is already installed there.'
+                'The computer did not return a compatible checkup. Confirm its name, network access, PowerShell remoting permission, and that a contract-compatible EndpointForge 0.8.0 or later is already installed there.'
         }
         $failureList.Add([pscustomobject]@{
             PSTypeName   = 'EndpointForge.FleetFailure'

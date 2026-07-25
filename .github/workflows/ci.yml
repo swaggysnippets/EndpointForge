@@ -15,13 +15,18 @@ concurrency:
 
 env:
   POWERSHELLGET_VERSION: '2.2.5'
-  PESTER_VERSION: '5.7.1'
+  PESTER_5_VERSION: '5.7.1'
+  PESTER_6_VERSION: '6.0.1'
   PSSCRIPTANALYZER_VERSION: '1.25.0'
 
 jobs:
   test-windows-powershell:
-    name: Windows PowerShell 5.1
-    runs-on: windows-latest
+    name: Windows PowerShell 5.1 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,14 +45,14 @@ jobs:
           # Microsoft-signed inbox Pester without bypassing publisher validation.
           $toolRoot = Join-Path $env:RUNNER_TEMP 'EndpointForgeModules'
           $null = New-Item -ItemType Directory -Path $toolRoot -Force
-          Save-Module Pester -RequiredVersion $env:PESTER_VERSION -Path $toolRoot -Repository PSGallery
+          Save-Module Pester -RequiredVersion $env:PESTER_5_VERSION -Path $toolRoot -Repository PSGallery
           Save-Module PSScriptAnalyzer -RequiredVersion $env:PSSCRIPTANALYZER_VERSION -Path $toolRoot -Repository PSGallery
           $env:PSModulePath = "$toolRoot;$env:PSModulePath"
           "PSModulePath=$env:PSModulePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $pester = Test-ModuleManifest (Join-Path $toolRoot "Pester\$env:PESTER_VERSION\Pester.psd1") -ErrorAction Stop
+          $pester = Test-ModuleManifest (Join-Path $toolRoot "Pester\$env:PESTER_5_VERSION\Pester.psd1") -ErrorAction Stop
           $analyzer = Test-ModuleManifest (Join-Path $toolRoot "PSScriptAnalyzer\$env:PSSCRIPTANALYZER_VERSION\PSScriptAnalyzer.psd1") -ErrorAction Stop
-          if ($pester.Version -ne [version]$env:PESTER_VERSION -or
+          if ($pester.Version -ne [version]$env:PESTER_5_VERSION -or
               $analyzer.Version -ne [version]$env:PSSCRIPTANALYZER_VERSION) {
             throw 'The resolved quality-tool versions do not match the pinned versions.'
           }
@@ -58,19 +63,27 @@ jobs:
         shell: powershell
         run: |
           $null = New-Item -ItemType Directory -Path .\TestResults -Force
-          .\build\Invoke-PesterTests.ps1 -TestResultPath .\TestResults\pester-5.1.xml
+          .\build\Invoke-PesterTests.ps1 -RequiredVersion $env:PESTER_5_VERSION `
+            -TestResultPath .\TestResults\pester-5.1.xml
+      - name: Run safe Windows runtime smoke test
+        shell: powershell
+        run: .\build\Test-WindowsRuntime.ps1
       - name: Upload Pester results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pester-windows-powershell
+          name: pester-windows-powershell-${{ matrix.os }}
           path: TestResults/*.xml
           if-no-files-found: warn
           retention-days: 14
 
   test-powershell:
-    name: PowerShell 7
-    runs-on: windows-latest
+    name: PowerShell 7 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,14 +99,14 @@ jobs:
 
           $toolRoot = Join-Path $env:RUNNER_TEMP 'EndpointForgeModules'
           $null = New-Item -ItemType Directory -Path $toolRoot -Force
-          Save-Module Pester -RequiredVersion $env:PESTER_VERSION -Path $toolRoot -Repository PSGallery
+          Save-Module Pester -RequiredVersion $env:PESTER_6_VERSION -Path $toolRoot -Repository PSGallery
           Save-Module PSScriptAnalyzer -RequiredVersion $env:PSSCRIPTANALYZER_VERSION -Path $toolRoot -Repository PSGallery
           $env:PSModulePath = "$toolRoot;$env:PSModulePath"
           "PSModulePath=$env:PSModulePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $pester = Test-ModuleManifest (Join-Path $toolRoot "Pester\$env:PESTER_VERSION\Pester.psd1") -ErrorAction Stop
+          $pester = Test-ModuleManifest (Join-Path $toolRoot "Pester\$env:PESTER_6_VERSION\Pester.psd1") -ErrorAction Stop
           $analyzer = Test-ModuleManifest (Join-Path $toolRoot "PSScriptAnalyzer\$env:PSSCRIPTANALYZER_VERSION\PSScriptAnalyzer.psd1") -ErrorAction Stop
-          if ($pester.Version -ne [version]$env:PESTER_VERSION -or
+          if ($pester.Version -ne [version]$env:PESTER_6_VERSION -or
               $analyzer.Version -ne [version]$env:PSSCRIPTANALYZER_VERSION) {
             throw 'The resolved quality-tool versions do not match the pinned versions.'
           }
@@ -104,12 +117,18 @@ jobs:
         shell: pwsh
         run: |
           $null = New-Item -ItemType Directory -Path .\TestResults -Force
-          .\build\Invoke-PesterTests.ps1 -TestResultPath .\TestResults\pester-7.xml
+          .\build\Invoke-PesterTests.ps1 -RequiredVersion $env:PESTER_6_VERSION `
+            -TestResultPath .\TestResults\pester-7.xml `
+            -CodeCoverage -CodeCoverageResultPath .\TestResults\coverage.xml `
+            -MinimumCoveragePercent 60
+      - name: Run safe Windows runtime smoke test
+        shell: pwsh
+        run: .\build\Test-WindowsRuntime.ps1
       - name: Upload Pester results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pester-powershell-7
+          name: pester-powershell-7-${{ matrix.os }}
           path: TestResults/*.xml
           if-no-files-found: warn
           retention-days: 14
@@ -117,7 +136,7 @@ jobs:
   build:
     name: Build and verify staged module
     needs: [test-windows-powershell, test-powershell]
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -126,6 +145,11 @@ jobs:
       - name: Build staged module
         shell: powershell
         run: .\build\Build-Module.ps1 -SkipTests
+      - name: Verify the 1.x public contract
+        shell: powershell
+        run: |
+          .\build\Test-PublicContract.ps1
+          .\build\Test-ReleaseMetadata.ps1
       - name: Verify staged module and SHA-256 inventory
         shell: powershell
         run: |

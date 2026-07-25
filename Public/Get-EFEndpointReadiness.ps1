@@ -14,7 +14,7 @@ function Get-EFEndpointReadiness {
     EndpointForge calls its list of expected settings a baseline. In user-friendly
     guidance, this command calls it a checklist: a list of things expected to be true,
     including settings, updates, storage, applications, jobs, files, certificates, events,
-    account relationships, or network availability. Selecting a checklist does not run it
+    local Windows management information, local network placement, account relationships, or network availability. Selecting a checklist does not run it
     or apply it.
 
     .PARAMETER Baseline
@@ -40,6 +40,7 @@ function Get-EFEndpointReadiness {
     Get-EFRemediationPlan
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.EndpointReadiness')]
     param(
         [Parameter(Position = 0)]
         [AllowNull()]
@@ -250,7 +251,7 @@ function Get-EFEndpointReadiness {
         IsRemoteSession               = $isRemoteSession
         ChecklistName                 = $checklistName
         ChecklistVersion              = $checklistVersion
-        ChecklistDefinition           = 'A checklist (called a baseline in automation) is a list of things expected to be true, such as settings, files, recent events, and network availability. Selecting it does not run checks or apply changes.'
+        ChecklistDefinition           = 'A checklist (called a baseline in automation) is a list of things expected to be true, such as settings, files, recent events, local network placement, and network availability. Selecting it does not run checks or apply changes.'
         ControlCount                  = $controls.Count
         AvailableControlCount         = $capabilities.Count - $unavailableControlCount
         UnavailableControlCount       = $unavailableControlCount

@@ -725,6 +725,116 @@ function Get-EFControlState {
                     -DesiredValue $desiredValue -Message $message
             }
 
+            'IpAddressInRange' {
+                $approvedRanges = @(
+                    Get-EFPropertyValue -InputObject $Control -Name 'ApprovedRanges'
+                )
+                $interfaceName = [string](
+                    Get-EFPropertyValue -InputObject $Control -Name 'InterfaceName' -Default ''
+                )
+                $timeoutSeconds = [int](
+                    Get-EFPropertyValue -InputObject $Control -Name 'TimeoutSeconds' -Default 10
+                )
+                [string[]]$canonicalRangeKeys = @(
+                    foreach ($approvedRange in $approvedRanges) {
+                        (ConvertTo-EFIpNetwork -Cidr ([string]$approvedRange)).CanonicalKey
+                    }
+                )
+                [Array]::Sort($canonicalRangeKeys, [StringComparer]::Ordinal)
+                $cacheMaterial = [ordered]@{
+                    Ranges         = @($canonicalRangeKeys)
+                    InterfaceName  = $interfaceName.ToUpperInvariant()
+                    TimeoutSeconds = $timeoutSeconds
+                } | ConvertTo-Json -Compress -Depth 4
+                $sha256 = [Security.Cryptography.SHA256]::Create()
+                try {
+                    $cacheHash = [Convert]::ToBase64String(
+                        $sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($cacheMaterial))
+                    )
+                }
+                finally {
+                    $sha256.Dispose()
+                }
+                $cacheKey = 'IpAddressInRange|' + $cacheHash
+                if (-not $evaluationCache.ContainsKey($cacheKey)) {
+                    $evaluationCache[$cacheKey] = Test-EFIpRange -ApprovedRanges $approvedRanges `
+                        -InterfaceName $interfaceName -TimeoutSeconds $timeoutSeconds
+                }
+
+                $rangeCheck = $evaluationCache[$cacheKey]
+                if (-not [bool]$rangeCheck.ProviderAvailable) {
+                    throw 'Windows local network information is unavailable, so the approved range could not be checked.'
+                }
+                if ([bool]$rangeCheck.IsEvaluationError) {
+                    $failureMessage = switch ([string]$rangeCheck.FailureReason) {
+                        'TimedOut' {
+                            'Windows did not finish the local IP range check within the configured time limit.'
+                        }
+                        { $_ -in @('InterfaceNotFound', 'InterfaceUnavailable', 'AmbiguousInterface') } {
+                            'Windows could not identify one active local network connection with the configured name.'
+                        }
+                        'SafetyLimitExceeded' {
+                            'The computer reported more local network information than EndpointForge can safely evaluate in one item.'
+                        }
+                        default {
+                            'Windows could not provide a trustworthy answer for the local IP range check.'
+                        }
+                    }
+                    throw $failureMessage
+                }
+
+                $actual = [bool]$rangeCheck.Matches
+                $status = if (Test-EFValueEqual -Actual $actual -Desired $desiredValue) {
+                    'Compliant'
+                }
+                else { 'NonCompliant' }
+                $message = if ($actual) {
+                    'An active local network connection has an address in a configured approved range. EndpointForge did not copy detected addresses or ApprovedRanges values into this evidence message.'
+                }
+                else {
+                    'No active local network connection has an address in a configured approved range. EndpointForge did not copy detected addresses or ApprovedRanges values into this evidence message.'
+                }
+                return New-EFControlResult -Control $Control -Status $status -ActualValue $actual `
+                    -DesiredValue $desiredValue -Message $message
+            }
+
+            'CimNamespaceExists' {
+                $namespace = [string](Get-EFPropertyValue -InputObject $Control -Name 'Namespace')
+                $timeoutSeconds = [int](Get-EFPropertyValue -InputObject $Control -Name 'TimeoutSeconds' -Default 10)
+                $cacheKey = 'CimNamespaceExists|{0}|{1}' -f $namespace.ToUpperInvariant(), $timeoutSeconds
+                if (-not $evaluationCache.ContainsKey($cacheKey)) {
+                    $evaluationCache[$cacheKey] = Test-EFCimNamespace -Namespace $namespace `
+                        -TimeoutSeconds $timeoutSeconds
+                }
+
+                $namespaceCheck = $evaluationCache[$cacheKey]
+                if (-not [bool]$namespaceCheck.ProviderAvailable) {
+                    throw 'Windows management information commands are unavailable, so the namespace could not be checked.'
+                }
+                if ([bool]$namespaceCheck.IsEvaluationError) {
+                    $failureMessage = switch ([string]$namespaceCheck.FailureReason) {
+                        'PermissionDenied' {
+                            'Windows did not permit access to the requested management information area. Open PowerShell as Administrator only if your organization approves that access, then try again.'
+                        }
+                        'TimedOut' {
+                            'Windows did not finish the management information area check within the configured time limit.'
+                        }
+                        default {
+                            'Windows could not provide a trustworthy answer for the requested management information area.'
+                        }
+                    }
+                    throw $failureMessage
+                }
+
+                $actual = [bool]$namespaceCheck.Exists
+                $status = if (Test-EFValueEqual -Actual $actual -Desired $desiredValue) { 'Compliant' } else { 'NonCompliant' }
+                $outcome = if ($actual) { 'is available' } else { 'was not found' }
+                return New-EFControlResult -Control $Control -Status $status -ActualValue $actual `
+                    -DesiredValue $desiredValue -Message (
+                        "The local Windows management information area '$namespace' $outcome. No WMI classes, instances, or property values are included in the result."
+                    )
+            }
+
             'BitLocker' {
                 if ($null -eq (Get-Command -Name Get-BitLockerVolume -ErrorAction SilentlyContinue)) {
                     return New-EFControlResult -Control $Control -Status NotApplicable -ActualValue $null `

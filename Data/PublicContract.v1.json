@@ -1,0 +1,148 @@
+{
+  "ContractVersion": "1.0",
+  "ChecklistFormatVersion": "1.0",
+  "Commands": {
+    "Compare-EFEndpointSummary": {
+      "Parameters": ["After:System.Object", "AllowDifferentComputer:System.Management.Automation.SwitchParameter", "Before:System.Object"],
+      "Outputs": ["EndpointForge.EndpointComparison"]
+    },
+    "Export-EFEndpointReport": {
+      "Parameters": ["AllowUnsafeCsvFormulaValues:System.Management.Automation.SwitchParameter", "AsArray:System.Management.Automation.SwitchParameter", "Confirm:System.Management.Automation.SwitchParameter", "Depth:System.Int32", "Force:System.Management.Automation.SwitchParameter", "Format:System.String", "InputObject:System.Object", "PassThru:System.Management.Automation.SwitchParameter", "Path:System.String", "WhatIf:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["System.IO.FileInfo"]
+    },
+    "Get-EFBaseline": {
+      "Parameters": ["ExpectedSha256:System.String", "ListAvailable:System.Management.Automation.SwitchParameter", "Name:System.String", "Path:System.String"],
+      "Outputs": ["EndpointForge.Baseline", "EndpointForge.BaselineInfo"]
+    },
+    "Get-EFComplianceReport": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "ControlId:System.String[]", "NoProgress:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.ComplianceReport"]
+    },
+    "Get-EFConfiguration": {
+      "Parameters": [],
+      "Outputs": ["EndpointForge.Configuration"]
+    },
+    "Get-EFEndpointHealth": {
+      "Parameters": ["IncludeSoftware:System.Management.Automation.SwitchParameter", "MaximumUptimeDays:System.Int32", "MinimumFreeSpacePercent:System.Int32", "NoProgress:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.EndpointHealth"]
+    },
+    "Get-EFEndpointInventory": {
+      "Parameters": ["IncludeSoftware:System.Management.Automation.SwitchParameter", "IncludeUser:System.Management.Automation.SwitchParameter", "NoProgress:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.EndpointInventory"]
+    },
+    "Get-EFEndpointReadiness": {
+      "Parameters": ["Baseline:System.Object", "ControlId:System.String[]"],
+      "Outputs": ["EndpointForge.EndpointReadiness"]
+    },
+    "Get-EFEndpointSummary": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "ControlId:System.String[]", "IncludeSoftware:System.Management.Automation.SwitchParameter", "MaximumUptimeDays:System.Int32", "MinimumFreeSpacePercent:System.Int32", "NoProgress:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.EndpointSummary"]
+    },
+    "Get-EFFleetSummary": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "ComputerName:System.String[]", "Credential:System.Management.Automation.PSCredential", "IncludeSoftware:System.Management.Automation.SwitchParameter", "MaximumUptimeDays:System.Int32", "MinimumFreeSpacePercent:System.Int32", "ThrottleLimit:System.Int32"],
+      "Outputs": ["EndpointForge.FleetSummary"]
+    },
+    "Get-EFInstalledSoftware": {
+      "Parameters": ["Architecture:System.String", "IncludeSystemComponents:System.Management.Automation.SwitchParameter", "IncludeUninstallCommand:System.Management.Automation.SwitchParameter", "Name:System.String", "Publisher:System.String", "Scope:System.String"],
+      "Outputs": ["EndpointForge.InstalledSoftware"]
+    },
+    "Get-EFManagementAgentHealth": {
+      "Parameters": ["Agent:System.String", "TimeoutSeconds:System.Int32"],
+      "Outputs": ["EndpointForge.ManagementAgentHealth"]
+    },
+    "Get-EFPendingReboot": {
+      "Parameters": [],
+      "Outputs": ["EndpointForge.PendingReboot"]
+    },
+    "Get-EFRemediationPlan": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "ControlId:System.String[]", "IncludeCompliant:System.Management.Automation.SwitchParameter", "NoProgress:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.RemediationPlan"]
+    },
+    "Invoke-EFEndpointRemediation": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "Confirm:System.Management.Automation.SwitchParameter", "ControlId:System.String[]", "NoProgress:System.Management.Automation.SwitchParameter", "StopOnError:System.Management.Automation.SwitchParameter", "WhatIf:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.RemediationReport"]
+    },
+    "Invoke-EFManagementAgentAction": {
+      "Parameters": ["Action:System.String", "Agent:System.String", "AllowManagementTraffic:System.Management.Automation.SwitchParameter", "Confirm:System.Management.Automation.SwitchParameter", "TimeoutSeconds:System.Int32", "WhatIf:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.ManagementAgentActionResult"]
+    },
+    "New-EFBaseline": {
+      "Parameters": ["Confirm:System.Management.Automation.SwitchParameter", "Description:System.String", "Force:System.Management.Automation.SwitchParameter", "Name:System.String", "Path:System.String", "Template:System.String", "Version:System.String", "WhatIf:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.BaselineCreationResult"]
+    },
+    "Set-EFConfiguration": {
+      "Parameters": ["Confirm:System.Management.Automation.SwitchParameter", "DisableFileLogging:System.Management.Automation.SwitchParameter", "LogLevel:System.String", "LogPath:System.String", "PassThru:System.Management.Automation.SwitchParameter", "Reset:System.Management.Automation.SwitchParameter", "RetryCount:System.Int32", "RetryDelaySeconds:System.Int32", "WhatIf:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.Configuration"]
+    },
+    "Show-EFEndpointSummary": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "ControlId:System.String[]", "Detailed:System.Management.Automation.SwitchParameter", "IncludeSoftware:System.Management.Automation.SwitchParameter", "InputObject:System.Object", "MaximumUptimeDays:System.Int32", "MinimumFreeSpacePercent:System.Int32", "NoColor:System.Management.Automation.SwitchParameter", "NoProgress:System.Management.Automation.SwitchParameter", "PassThru:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.EndpointSummary"]
+    },
+    "Show-EFMenu": {
+      "Parameters": ["Baseline:System.Object", "IncludeSoftware:System.Management.Automation.SwitchParameter", "MaximumUptimeDays:System.Int32", "MinimumFreeSpacePercent:System.Int32", "NoColor:System.Management.Automation.SwitchParameter", "NoPause:System.Management.Automation.SwitchParameter", "NoProgress:System.Management.Automation.SwitchParameter", "PassThru:System.Management.Automation.SwitchParameter", "ReportDirectory:System.String"],
+      "Outputs": ["EndpointForge.MenuSession"]
+    },
+    "Test-EFBaseline": {
+      "Parameters": ["InputObject:System.Object", "Name:System.String", "PassThru:System.Management.Automation.SwitchParameter", "Path:System.String"],
+      "Outputs": ["EndpointForge.BaselineValidation", "System.Boolean"]
+    },
+    "Test-EFEndpointCompliance": {
+      "Parameters": ["AllowNetworkChecks:System.Management.Automation.SwitchParameter", "Baseline:System.Object", "ControlId:System.String[]", "NoProgress:System.Management.Automation.SwitchParameter", "PassThru:System.Management.Automation.SwitchParameter"],
+      "Outputs": ["EndpointForge.ComplianceReport", "System.Boolean"]
+    }
+  },
+  "ExitCodes": {
+    "0": "Healthy, compliant, complete, or successful",
+    "1": "Warning or attention required",
+    "2": "Critical, noncompliant, or change available",
+    "3": "Unknown, incomplete, blocked, or failed"
+  },
+  "StatusVocabularies": {
+    "EndpointForge.ControlResult.Status": ["Compliant", "NonCompliant", "NotApplicable", "Error"],
+    "EndpointForge.EndpointHealth.Checks.Status": ["Healthy", "Unhealthy", "Unknown"],
+    "EndpointForge.EndpointHealth.Status": ["Healthy", "Warning", "Critical", "Unknown"],
+    "EndpointForge.EndpointSummary.OverallStatus": ["Healthy", "Warning", "Critical", "Incomplete"],
+    "EndpointForge.ComplianceReport.Status": ["Compliant", "NonCompliant", "Incomplete"],
+    "EndpointForge.Collection.DataStatus": ["Complete", "Partial", "Failed"],
+    "EndpointForge.EndpointReadiness.Status": ["Ready", "Limited", "Blocked"],
+    "EndpointForge.ReadinessCheck.Status": ["Ready", "Warning", "Blocked"],
+    "EndpointForge.ControlCapability.CheckStatus": ["Available", "Unavailable"],
+    "EndpointForge.ControlCapability.FixStatus": ["NotOffered", "Unavailable", "NeedsAdministrator", "Available"],
+    "EndpointForge.EndpointComparisonChange.Category": ["Changed", "ChecklistChanged", "CouldNotCheck", "NewIssue", "NowAvailable", "Improved", "Unchanged"],
+    "EndpointForge.ManagementAgentHealth.LocalStatus": ["LooksReady", "NeedsAttention", "NotDetected", "CouldNotCheck"],
+    "EndpointForge.ManagementAgentActionResult.Outcome": ["WhatIf", "Skipped", "NotRequired", "Completed", "RequestAccepted", "PartiallyChanged", "Failed"],
+    "EndpointForge.RemediationPlanStep.Action": ["NoAction", "NotApplicable", "Blocked", "Automatic", "Manual"],
+    "EndpointForge.RemediationResult.Outcome": ["NotRequired", "NotApplicable", "EvaluationFailed", "NotRemediable", "WhatIf", "Skipped", "Changed", "VerificationFailed", "PartiallyChanged", "Failed"]
+  },
+  "ResultSchemaHashes": {
+    "EndpointForge.BaselineCreationResult": "1ACD5759DD8CCD58D3735C6EA4762E108622C460BAE5CBBDB71152407AB8CB19",
+    "EndpointForge.BaselineInfo": "745A5B3C19D7F1DCCC5DF4E8CD1B70ED8FAF3F5DCFEFF1CDFF80420E31D475A6",
+    "EndpointForge.BaselineValidation": "46A1EFDAD54EB381EE92477D9DD2523D0F3320FF7C6A676D5B8BDAA7D15D4FEF",
+    "EndpointForge.ComplianceReport": "A8E2D90522189E8FE00C82F64555280747B5A1957138ABBEA3DE978607FE4225",
+    "EndpointForge.Configuration": "96DE2BDA23BDF9BAFE375B8C4A00C20AEA2858810EAE5F92D45A28835925E57F",
+    "EndpointForge.ControlCapability": "1F154FDDF74FA1D11DF8595D33AFE78A2530E2E4E8F7A910D1519D5176C8F24E",
+    "EndpointForge.ControlResult": "275BFECB21E5E4D43AF3DF2EE1F581D9260137F970CF570D0108C3B5AE8AFAB8",
+    "EndpointForge.EndpointComparison": "FFFC9A378311F76471BCDD909E21F52183BAEFFF5E81B188CC2397D8D0F0D92A",
+    "EndpointForge.EndpointComparisonChange": "EDF202BF880C4017F8E0AA4F0049664D6F23935CB80473373719A75887507F33",
+    "EndpointForge.EndpointHealth": "B0E7D2B3E08CF21A439290493A8BABEB2A948112530EE0203F23A09417940DC7",
+    "EndpointForge.EndpointInventory": "8D8E7E31C6A07403F38548763EE289DA332A892DAB6C8696A4CC9E80142DBBB6",
+    "EndpointForge.EndpointReadiness": "7B6E575FC37D3CF0264A0A2A68AF8C501A21EF1095DF5268849CAFC862F58CC5",
+    "EndpointForge.EndpointSummary": "EB769E443CBFBB97172F7F065DEA2038DD3700E4C3531FFA56984727C0D4FE81",
+    "EndpointForge.FleetComputerResult": "B89697841AEBCD880BDA0609BF12F918A91575A4C4D91870588B243DAC99A445",
+    "EndpointForge.FleetFailure": "8D07BE07D6692D0DCA4D171D4EE790ECB62BBD5136EE61F57362C6385B65BF66",
+    "EndpointForge.FleetSummary": "66D398DDEC04E93851F874555C38CD0BE1A9D0479C73A6F8CE4926862B95E553",
+    "EndpointForge.InstalledSoftware": "8044AC468ADBFD20A5EFACC69CAE039EC8FEE78B709D4DD6719D511DF65D3F05",
+    "EndpointForge.ManagementAgentActionResult": "3129D034D04C578218E1A65143F29690269710DA8C48D85A358B294C71D3E54F",
+    "EndpointForge.ManagementAgentHealth": "BBDFFFB08676111961E837408B5C2026EB29167A6C7463EFB9C88B140AAB77A7",
+    "EndpointForge.MenuError": "190A9236FF885AEE6AF52EAD2D364F8F35AF9A3BD34437CAB4A1477A029D5157",
+    "EndpointForge.MenuHistoryEntry": "28BA961D9570E873D2AE9C354B97442E2A907D8E3877C25116753C09996ED176",
+    "EndpointForge.MenuReport": "E585D71D22E6A6CAC938CBF0F01C96024F4FAEDD1FA78D22C5CB8F2A08F1BC47",
+    "EndpointForge.MenuSession": "EC2CCA8DE1422A47037A086D3BCAC8888525A6E3DFE3D3C8135322851223C0F8",
+    "EndpointForge.PendingReboot": "29AE7D5C731A8114A6278B8855AEB5FDFD0838CF25DB3783D92C3D1018F6D7BB",
+    "EndpointForge.ReadinessCheck": "54A3A8B5974A9A512B1C292CD28C0F09487B0A20F9049B17FDE7BBBB54F1EFF0",
+    "EndpointForge.RemediationPlan": "20D73F34AFF4DB8BC8251E78C2E70B0832C678AA5DB007A912FD4221F647E75E",
+    "EndpointForge.RemediationPlanStep": "5F1A22D41E0F0A6128177F95D310253EF471CDD19FAA0E95EF20660B3A607367",
+    "EndpointForge.RemediationReport": "B68FED7BDA39AB6237E689D5F964BBF16D64CBD23A6447E2F6E8275F0E2ED85D",
+    "EndpointForge.RemediationResult": "8A8DADFDBD7E1C3A7CCCA2BCAD5D6FFA0E3325D11C2EE27BCB90F5A5702F6A0D"
+  }
+}

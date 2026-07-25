@@ -7,8 +7,9 @@ function Get-EFEndpointSummary {
     Provides the recommended first check for EndpointForge. It reads computer details,
     everyday health, restart status, and each item in the selected checklist, then
     explains what needs attention. A checklist can cover settings, updates, storage,
-    applications, jobs, files, certificates, events, processes, account relationships,
-    and approved network services. The command does not apply a fix or change Windows.
+    applications, jobs, files, certificates, events, processes, local Windows management
+    information, local network placement, account relationships, and approved network services. The command does
+    not apply a fix or change Windows.
 
     TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
     LocalGroupMembership are network-active. They are blocked unless AllowNetworkChecks is
@@ -59,6 +60,7 @@ function Get-EFEndpointSummary {
     EndpointForge.EndpointSummary
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.EndpointSummary')]
     param(
         [Parameter(Position = 0)]
         [AllowNull()]

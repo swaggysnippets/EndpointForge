@@ -1,5 +1,6 @@
 {
   "$schema": "../Data/Baseline.schema.json",
+  "FormatVersion": "1.0",
   "Name": "Contoso.Workstation",
   "Version": "1.0.0",
   "Description": "Example organization baseline extending common endpoint controls.",

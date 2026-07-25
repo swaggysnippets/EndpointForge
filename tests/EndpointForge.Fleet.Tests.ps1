@@ -104,7 +104,7 @@ Describe 'EndpointForge fleet checkup' {
             $result.ExitCode | Should -Be 3
             @($result.Failures).Count | Should -Be 1
             $result.Failures[0].ComputerName | Should -Be 'PC-OFFLINE'
-            $result.Failures[0].Message | Should -Match 'did not return a checkup'
+            $result.Failures[0].Message | Should -Match 'did not return a compatible checkup'
             $result.Summary | Should -Match '2 of 3 computer\(s\) were checked'
         }
 
@@ -173,6 +173,92 @@ Describe 'EndpointForge fleet checkup' {
                 $ArgumentList[1] -eq $true -and
                 $ErrorAction -eq 'SilentlyContinue'
             }
+        }
+
+        It 'sends only source checklist fields that remain valid after remoting serialization' {
+            Mock Resolve-EFBaseline {
+                [pscustomobject]@{
+                    PSTypeName      = 'EndpointForge.Baseline'
+                    Name            = 'DecoratedChecklist'
+                    Version         = '1.2.3'
+                    Description     = 'A decorated test checklist.'
+                    Controls        = @(
+                        [pscustomobject]@{
+                            Id = 'LOCAL-RANGE'; Title = 'The computer uses an approved IP range';
+                            Type = 'IpAddressInRange'; Severity = 'Low';
+                            ApprovedRanges = @('10.20.0.0/16'); TimeoutSeconds = 10;
+                            DesiredValue = $true;
+                            Remediable = $false; RequiresReboot = $false
+                        }
+                    )
+                    SourcePath      = 'C:\Program Files\WindowsPowerShell\Modules\EndpointForge\Data\EnterpriseRecommended.json'
+                    ControlCount    = 1
+                    RemediableCount = 0
+                }
+            }
+            Mock Invoke-Command {
+                $script:fleetBaselineArgument = $ArgumentList[0]
+                [pscustomobject]@{
+                    PSComputerName     = 'PC-SERIALIZED'
+                    RemoteComputerName = 'PC-SERIALIZED'
+                    Checkup            = [pscustomobject]@{
+                        ComputerName = 'PC-SERIALIZED'; OverallStatus = 'Healthy'; Score = 100;
+                        IssueCount = 0; UnknownCount = 0; CompletedAtUtc = [DateTime]::UtcNow;
+                        NextStep = 'No action is required.'
+                    }
+                }
+            }
+
+            $serializedTarget = 'PC-SERIALIZED'
+            $result = Get-EFFleetSummary -ComputerName $serializedTarget
+            $roundTrip = [Management.Automation.PSSerializer]::Deserialize(
+                [Management.Automation.PSSerializer]::Serialize($script:fleetBaselineArgument)
+            )
+
+            $result.SucceededCount | Should -Be 1
+            $script:fleetBaselineArgument.PSObject.Properties.Name | Should -Not -Contain 'SourcePath'
+            $script:fleetBaselineArgument.PSObject.Properties.Name | Should -Not -Contain 'ControlCount'
+            $script:fleetBaselineArgument.PSObject.Properties.Name | Should -Not -Contain 'RemediableCount'
+            @($roundTrip.Controls[0].ApprovedRanges).Count | Should -Be 1
+            $roundTrip.Controls[0].ApprovedRanges[0] | Should -Be '10.20.0.0/16'
+            { Assert-EFBaseline -Baseline $roundTrip } | Should -Not -Throw
+        }
+
+        It 'rejects invalid names and more than 256 unique targets before remoting' {
+            $invalidTarget = 'PC-01;whoami'
+            { Get-EFFleetSummary -ComputerName $invalidTarget } |
+                Should -Throw '*exact host name or IP address*'
+
+            $tooManyTargets = @(1..257 | ForEach-Object { "PC-{0:D3}" -f $_ })
+            { Get-EFFleetSummary -ComputerName $tooManyTargets } |
+                Should -Throw '*limited to 256 unique computers*'
+        }
+
+        It 'returns remote module and summary-schema compatibility evidence' {
+            Mock Invoke-Command {
+                [pscustomobject]@{
+                    PSComputerName      = 'PC-CONTRACT'
+                    RemoteComputerName  = 'PC-CONTRACT'
+                    RemoteModuleVersion = '0.9.0'
+                    SummarySchemaVersion = '1.0'
+                    Checkup             = [pscustomobject]@{
+                        SchemaVersion  = '1.0'
+                        ComputerName   = 'PC-CONTRACT'
+                        OverallStatus  = 'Healthy'
+                        Score          = 100
+                        IssueCount     = 0
+                        UnknownCount   = 0
+                        CompletedAtUtc = [DateTime]::UtcNow
+                        NextStep       = 'No action is required.'
+                    }
+                }
+            }
+
+            $contractTarget = 'PC-CONTRACT'
+            $result = Get-EFFleetSummary -ComputerName $contractTarget
+
+            $result.Results[0].RemoteModuleVersion | Should -Be '0.9.0'
+            $result.Results[0].SummarySchemaVersion | Should -Be '1.0'
         }
     }
 }

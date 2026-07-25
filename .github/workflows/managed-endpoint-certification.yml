@@ -1,0 +1,65 @@
+name: Managed endpoint certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      ring:
+        description: Endpoint management state represented by this disposable lab runner
+        required: true
+        type: choice
+        options:
+          - Unmanaged
+          - Intune
+          - ConfigurationManager
+          - CoManaged
+      allow_changing_actions:
+        description: Run the approved live agent action after WhatIf validation
+        required: true
+        type: boolean
+        default: false
+      change_acknowledgement:
+        description: Enter I_ACCEPT_MANAGED_ENDPOINT_CHANGES when changing actions are enabled
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-endpoint-${{ inputs.ring }}
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    name: ${{ inputs.ring }} lab certification
+    runs-on: [self-hosted, windows, endpointforge-lab]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run managed-endpoint certification
+        shell: powershell
+        env:
+          CERTIFICATION_RING: ${{ inputs.ring }}
+          ALLOW_CHANGING_ACTIONS: ${{ inputs.allow_changing_actions }}
+          CHANGE_ACKNOWLEDGEMENT: ${{ inputs.change_acknowledgement }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parameters = @{
+            Ring                  = $env:CERTIFICATION_RING
+            OutputPath            = ".\TestResults\managed-endpoint-$($env:CERTIFICATION_RING.ToLowerInvariant()).json"
+            ChangeAcknowledgement = $env:CHANGE_ACKNOWLEDGEMENT
+          }
+          if ($env:ALLOW_CHANGING_ACTIONS -eq 'true') {
+            $parameters.AllowChangingActions = $true
+          }
+          .\build\Invoke-ManagedEndpointCertification.ps1 @parameters
+      - name: Upload sanitized certification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: managed-endpoint-${{ inputs.ring }}-${{ github.run_id }}
+          path: TestResults/managed-endpoint-*.json
+          if-no-files-found: error
+          retention-days: 30
