@@ -68,6 +68,7 @@ function Show-EFEndpointSummary {
         Justification = 'This opt-in Show command intentionally renders a host-only operator dashboard.'
     )]
     [CmdletBinding(DefaultParameterSetName = 'Collect')]
+    [OutputType('EndpointForge.EndpointSummary')]
     param(
         [Parameter(Mandatory, ValueFromPipeline, ParameterSetName = 'InputObject')]
         [ValidateNotNull()]

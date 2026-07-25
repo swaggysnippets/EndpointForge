@@ -11,6 +11,7 @@ function Get-EFChecklistTypeCatalog {
         [pscustomobject]@{ Category = 'Windows settings and security'; Type = 'BitLocker'; Question = 'Is this drive protected by BitLocker?'; Activity = 'Report only' }
         [pscustomobject]@{ Category = 'Windows settings and security'; Type = 'SecureBoot'; Question = 'Is Secure Boot turned on?'; Activity = 'Report only' }
         [pscustomobject]@{ Category = 'Windows settings and security'; Type = 'Tpm'; Question = 'Is the computer security chip present and ready?'; Activity = 'Report only' }
+        [pscustomobject]@{ Category = 'Windows settings and security'; Type = 'CimNamespaceExists'; Question = 'Does this Windows management information area exist?'; Activity = 'Report only; checks one exact local Windows management information area' }
         [pscustomobject]@{ Category = 'Everyday computer health'; Type = 'PendingRestart'; Question = 'Does this computer need to restart?'; Activity = 'Report only' }
         [pscustomobject]@{ Category = 'Everyday computer health'; Type = 'DiskSpace'; Question = 'Does this drive have enough free space?'; Activity = 'Report only' }
         [pscustomobject]@{ Category = 'Everyday computer health'; Type = 'WindowsUpdateAvailable'; Question = 'Is the number of waiting Windows updates within the allowed limit?'; Activity = 'Report only; contacts the configured update service' }
@@ -27,5 +28,6 @@ function Get-EFChecklistTypeCatalog {
         [pscustomobject]@{ Category = 'Connections and access'; Type = 'DnsResolution'; Question = 'Can this computer find this server name?'; Activity = 'Report only; uses Windows name resolution' }
         [pscustomobject]@{ Category = 'Connections and access'; Type = 'HttpEndpointHealth'; Question = 'Is this website or web service responding as expected?'; Activity = 'Report only; contacts the named web address' }
         [pscustomobject]@{ Category = 'Connections and access'; Type = 'LocalGroupMembership'; Question = 'Is this approved account directly in this local group?'; Activity = 'Report only; account-name lookup can contact an identity provider' }
+        [pscustomobject]@{ Category = 'Connections and access'; Type = 'IpAddressInRange'; Question = 'Is this computer on an approved IP range?'; Activity = 'Report only; reads local network connection state and does not contact a service' }
     )
 }

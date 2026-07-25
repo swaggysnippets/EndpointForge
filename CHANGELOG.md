@@ -2,7 +2,120 @@
 
 All notable changes use the structure from Keep a Changelog, and versions follow Semantic Versioning.
 
-## [Unreleased]
+## [0.9.0] - 2026-07-24
+
+Versions 0.7.0 and 0.8.0 were development milestones and were not separately published
+to the PowerShell Gallery or as GitHub releases. Their capabilities first ship publicly
+in 0.9.0.
+
+### Added
+
+- The safe `CimNamespaceExists` and `IpAddressInRange` checklist items developed during
+  0.7, bringing the checklist catalog to 26 types.
+- The guarded local Intune and Configuration Manager health and support-action workflow
+  developed during 0.8.
+- A checked-in 1.0 public contract for all 22 commands, declared output types, stable result
+  code meanings, and an independently versioned checklist `FormatVersion`.
+- Complete compatibility, public-contract, migration, enterprise-deployment, and release
+  gate documentation under `docs`.
+- `Get-EFBaseline -ExpectedSha256`, one-buffer hash-and-parse validation, strict UTF-8,
+  a 1 MiB custom-checklist limit, and provenance fields showing whether checklist
+  integrity was verified.
+- A sanitized, manually dispatched managed-endpoint certification workflow for unmanaged,
+  Intune, Configuration Manager, and co-managed disposable lab runners.
+- CODEOWNERS, dependency-update configuration, structured issue reporting, pull-request
+  safety checks, release metadata validation, coverage evidence, a CycloneDX release
+  software bill of materials, and provenance attestation support.
+
+### Changed
+
+- Unknown endpoint-health evidence now returns `Status = Unknown` and result code `3`;
+  unavailable required evidence can no longer produce a healthy result.
+- Partial management-agent startup evidence now returns `NeedsAttention`. Management-agent
+  health correctly marks its computer and operational metadata as sensitive.
+- A management-agent restart now uses one monotonic overall deadline rather than giving
+  stop and start independent full timeouts.
+- CSV exports neutralize spreadsheet formula prefixes in text values and headings by
+  default. The clearly named `-AllowUnsafeCsvFormulaValues` escape hatch is limited to
+  explicitly trusted non-spreadsheet CSV consumers.
+- Applying a supported fix from a custom checklist now requires a baseline object loaded
+  with an approved SHA-256 hash. Unverified custom files remain available for read-only
+  checks and `-WhatIf` previews.
+- Fleet checks are limited to 256 exact targets and return remote module and summary-schema
+  evidence. The 1.x contract rejects incompatible remote major versions or schemas.
+- CI covers Windows Server 2022 and 2025 runners in Windows PowerShell 5.1 and PowerShell 7,
+  runs the safe Windows runtime smoke test, records coverage, and validates the public
+  contract.
+
+### Release safety
+
+- The Gallery workflow is now manual, environment-approved, tag-and-main-lineage verified,
+  idempotent, and ordered so the GitHub release becomes public only after Gallery
+  publication and a clean-install runtime smoke test.
+- Stable 1.x publication requires every staged PowerShell file to be timestamp-signed by
+  the expected publisher certificate. Release archives and checksum inventories receive
+  GitHub build-provenance attestations.
+- Version 0.9.0 is the preview and contract candidate for 1.0. The 1.0 tag remains blocked until trusted
+  Authenticode credentials and the documented unmanaged, Intune, Configuration Manager,
+  co-managed, privilege, and PowerShell certification evidence are complete.
+
+## [0.8.0] - 2026-07-22
+
+### Added
+
+- `Get-EFManagementAgentHealth`, a read-only local check for the Microsoft Intune
+  Management Extension and Microsoft Configuration Manager client. It reports fixed
+  service, startup, main-log metadata, and local-interface evidence as `LooksReady`,
+  `NeedsAttention`, `NotDetected`, or `CouldNotCheck` without contacting a management
+  service or reading log contents and sensitive management identifiers.
+- `Invoke-EFManagementAgentAction`, a guarded command for four fixed support actions:
+  starting or restarting the Intune or Configuration Manager service, and requesting or
+  evaluating Configuration Manager machine policy.
+- A plain-language menu option for checking either local agent and previewing a support
+  action before approval, plus script examples and formatted health and action receipts.
+
+### Changed
+
+- The module version is 0.8.0. The checklist catalog remains at 26 types, including the
+  `CimNamespaceExists` and `IpAddressInRange` types added in 0.7.0.
+- Documentation now explains Intune and Configuration Manager agent evidence, action
+  combinations, asynchronous policy requests, privacy limits, and recovery boundaries for
+  readers who do not already know either product.
+
+### Safety
+
+- Health checks are local-only and make no management-service request. They do not read log
+  contents, policies, applications, user data, tenant or site identifiers, device IDs, or
+  server addresses. Absence of the Intune Management Extension alone is not treated as
+  proof that a computer is not enrolled in Intune.
+- Every support action uses a fixed allowlist, `SupportsShouldProcess` with high confirmation
+  impact, `-WhatIf`, an Administrator requirement, explicit `-AllowManagementTraffic`, and
+  a bounded timeout. Accepted policy requests are asynchronous and are never reported as
+  proof that synchronization or assigned work completed.
+- Arbitrary commands, WMI/CIM methods, Configuration Manager schedule IDs, remote and fleet
+  actions, policy reset, cache deletion, agent reinstall, management-data removal, and
+  device re-enrollment remain out of scope.
+
+## [0.7.0] - 2026-07-22
+
+### Added
+
+- `CimNamespaceExists`, a report-only checklist item that verifies one exact local WMI/CIM namespace such as `root\ccm` inside a bounded time limit. Its evidence value is Boolean, and no WMI objects or provider data are returned.
+- `IpAddressInRange`, a report-only checklist item that verifies whether any eligible address on an active local connection belongs to one of 1 through 32 approved IPv4 or IPv6 CIDR networks. It can optionally target one exact connection name, runs inside a bounded worker, and does not contact DNS, a gateway, or another service.
+- Maintained `root\cimv2` and documentation-only IP-range examples, complete schema rules, guided-menu entries, operational help, and Microsoft references for both new item types.
+
+### Changed
+
+- The checklist capability catalog and documentation now describe 26 supported item types, and the editable EverydayChecks example now contains 18 practical items.
+- The module version is 0.7.0; remote computers evaluating the new item types must have EndpointForge 0.7.0 or later installed.
+
+### Safety
+
+- Namespace paths must begin with `root`; segments accept only letters, numbers, and underscores. Remote targets, credentials, free-form WQL, method calls, returned WMI data, raw command lines, and PowerShell script text are not accepted.
+- A missing namespace is **Does not match**. Access denial, provider failures, malformed evidence, and hard timeouts remain **Could not check**, never passing results.
+- IP ranges must be unique canonical CIDR networks. Match-all `/0` ranges, host bits, legacy or shorthand IPv4, scoped or mapped IPv6, wildcards, masks, and start-end forms are rejected. Generated evidence does not copy detected addresses or `ApprovedRanges` values and omits adapter objects and network configuration details; author-provided titles and explanation fields remain visible.
+- The IP-range item reads only local connection state and performs local address math, so it does not require `-AllowNetworkChecks`. Missing, down, loopback-only, or ambiguous named connections and unavailable evidence remain **Could not check**.
+- EndpointForge continues to treat checklists as configuration data rather than executable code. A generic command runner was intentionally not introduced because checklists can run as Administrator or `SYSTEM`.
 
 ## [0.6.0] - 2026-07-22
 

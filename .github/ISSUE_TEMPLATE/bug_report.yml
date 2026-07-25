@@ -1,0 +1,65 @@
+name: Bug report
+description: Report an EndpointForge result or behavior that appears incorrect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve EndpointForge. Do not include credentials, organization names, device names, IP addresses, log contents, or other private endpoint data. Security vulnerabilities must be reported privately using the repository Security tab or the address in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: EndpointForge version
+      description: Run `Get-Module EndpointForge -ListAvailable | Select-Object Name,Version`.
+      placeholder: 0.9.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition and version
+      placeholder: Windows 11 Enterprise 25H2
+    validations:
+      required: true
+  - type: input
+    id: powershell
+    attributes:
+      label: PowerShell version
+      placeholder: Windows PowerShell 5.1 or PowerShell 7.6
+    validations:
+      required: true
+  - type: dropdown
+    id: privilege
+    attributes:
+      label: Session context
+      options:
+        - Standard user
+        - Administrator
+        - SYSTEM
+        - Remote PowerShell session
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the command, expected result, and actual result using sanitized sample values.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest safe example that reproduces the issue.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed credentials, organization data, device identifiers, IP addresses, and sensitive log content.
+          required: true

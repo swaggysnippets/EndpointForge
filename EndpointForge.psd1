@@ -1,6 +1,6 @@
 @{
     RootModule        = 'EndpointForge.psm1'
-    ModuleVersion     = '0.6.0'
+    ModuleVersion     = '0.9.0'
     GUID              = '7566d24f-23a9-4481-8cb1-a5ad1e8a013d'
     Author            = 'Logan Bamborough'
     CompanyName       = 'Logan Bamborough'
@@ -8,7 +8,6 @@
     Description       = 'User-friendly, enterprise-safe Windows computer checkups with guided menus, plain-language findings, guarded fix previews, comparisons, fleet checks, and self-contained reports.'
     PowerShellVersion = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
-    HelpInfoURI       = 'https://github.com/swaggysnippets/EndpointForge/blob/main/README.md'
     FormatsToProcess  = @('EndpointForge.Format.ps1xml')
 
     FunctionsToExport = @(
@@ -23,9 +22,11 @@
         'Get-EFEndpointSummary'
         'Get-EFFleetSummary'
         'Get-EFInstalledSoftware'
+        'Get-EFManagementAgentHealth'
         'Get-EFPendingReboot'
         'Get-EFRemediationPlan'
         'Invoke-EFEndpointRemediation'
+        'Invoke-EFManagementAgentAction'
         'New-EFBaseline'
         'Set-EFConfiguration'
         'Show-EFMenu'
@@ -43,11 +44,12 @@
                 'Windows', 'Endpoint', 'Enterprise', 'Automation', 'Compliance',
                 'Inventory', 'Remediation', 'Security', 'Intune', 'RMM', 'Report', 'HTML', 'Fleet',
                 'Diagnostics', 'EventLog', 'Monitoring', 'TCP', 'WindowsUpdate', 'DNS', 'HTTP',
-                'Certificate', 'ScheduledTask'
+                'Certificate', 'ScheduledTask', 'WMI', 'CIM', 'Networking', 'CIDR', 'IPv4', 'IPv6',
+                'ConfigurationManager', 'ConfigMgr', 'SCCM', 'CCM', 'ManagementAgent'
             )
             LicenseUri = 'https://opensource.org/license/mit'
             ProjectUri = 'https://github.com/swaggysnippets/EndpointForge'
-            ReleaseNotes = 'Adds 12 report-only checklist types for pending restarts, disk space, available Windows updates, installed applications, scheduled job health, Defender definition age, file freshness, certificate expiry, DNS, HTTP endpoints, running programs, and local group membership. Includes a 24-item capability guide, expanded editable examples, privacy-minimized results, bounded checks, and explicit approval for network-active items.'
+            ReleaseNotes = 'Preview release and contract candidate for EndpointForge 1.0. Adds safe WMI/CIM namespace and local IP-range checklist items; guarded local Intune and Configuration Manager health/support tooling; truthful unknown-result semantics; CSV formula protection; hash-pinned, size-bounded custom checklist loading; module-owned privileged checklist-integrity enforcement; versioned public and checklist contracts; bounded fleet compatibility evidence; complete support and migration documentation; managed-endpoint certification tooling; and hardened signed release automation. The 0.7 and 0.8 development milestones were not separately published, so their capabilities first ship in 0.9.0. Stable EndpointForge 1.0 remains gated on trusted Authenticode signing and recorded managed-device certification.'
         }
     }
 }

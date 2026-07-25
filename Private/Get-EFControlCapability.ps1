@@ -22,6 +22,7 @@ function Get-EFControlCapability {
     $howChecked = $null
     $whatWouldChange = $null
     $isSupportedType = $true
+    $requiresTrustedCimModule = $false
 
     switch ($type) {
         'Registry' {
@@ -147,6 +148,16 @@ function Get-EFControlCapability {
             $howChecked = 'With explicit network approval, reads one exact local group inside a time-limited worker, resolves only the requested account to a security identifier, and compares it with direct-member identifiers. Unrelated member identities are not resolved or included in results.'
             $whatWouldChange = 'Nothing. EndpointForge does not add or remove accounts or change local groups. Windows may contact an organizational identity provider while resolving the requested account.'
         }
+        'IpAddressInRange' {
+            $howChecked = 'Reads active local network connections in a time-limited worker and checks whether any usable local address belongs to one configured approved range. An optional exact connection name narrows the check. It does not contact DNS, a gateway, or any network service, and it returns no addresses.'
+            $whatWouldChange = 'Nothing. EndpointForge does not change network connections, addresses, VPNs, routes, DNS, DHCP, or firewall settings.'
+        }
+        'CimNamespaceExists' {
+            $requiresTrustedCimModule = $true
+            $administratorRecommendedForCheck = $true
+            $howChecked = 'Uses a time-limited local Windows management query to check one exact WMI/CIM namespace path. It does not accept a remote computer, script, command line, credentials, or a free-form query, and it returns no WMI classes, instances, or property values.'
+            $whatWouldChange = 'Nothing. EndpointForge opens the named local Windows management information area read-only and does not call methods, change provider data, or run checklist-supplied code.'
+        }
         'BitLocker' {
             $checkCommands = @('Get-BitLockerVolume')
             $administratorRecommendedForCheck = $true
@@ -175,6 +186,17 @@ function Get-EFControlCapability {
     $missingCheckCommands = [Collections.Generic.List[string]]::new()
     $missingFixCommands = [Collections.Generic.List[string]]::new()
     if ($IsWindowsPlatform -and $isSupportedType) {
+        if ($requiresTrustedCimModule) {
+            $trustedCimManifestPath = [IO.Path]::Combine(
+                [string]$PSHOME,
+                'Modules',
+                'CimCmdlets',
+                'CimCmdlets.psd1'
+            )
+            if (-not [IO.File]::Exists($trustedCimManifestPath)) {
+                $missingCheckCommands.Add('Get-CimInstance (built-in CimCmdlets module)')
+            }
+        }
         foreach ($commandName in $checkCommands) {
             if ($null -eq (Get-Command -Name $commandName -ErrorAction SilentlyContinue)) {
                 $missingCheckCommands.Add($commandName)

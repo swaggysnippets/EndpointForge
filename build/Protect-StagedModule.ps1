@@ -10,7 +10,7 @@ param(
     [string]$CertificateStoreLocation = 'CurrentUser',
 
     [Parameter(Mandatory)]
-    [ValidatePattern('^https?://')]
+    [ValidatePattern('^http://')]
     [string]$TimestampServer
 )
 
@@ -56,6 +56,9 @@ foreach ($file in $signableFiles) {
             -TimestampServer $TimestampServer -HashAlgorithm SHA256 -ErrorAction Stop
         if ($signature.Status -ne 'Valid') {
             throw "Signing '$($file.FullName)' returned status '$($signature.Status)': $($signature.StatusMessage)"
+        }
+        if ($null -eq $signature.TimeStamperCertificate) {
+            throw "Signing '$($file.FullName)' did not return trusted timestamp evidence."
         }
         $signedCount++
     }

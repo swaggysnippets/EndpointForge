@@ -9,8 +9,12 @@ function Get-EFConfiguration {
 
     .EXAMPLE
     Get-EFConfiguration
+
+    .OUTPUTS
+    EndpointForge.Configuration
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.Configuration')]
     param()
 
     [pscustomobject]@{

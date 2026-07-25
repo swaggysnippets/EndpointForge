@@ -6,8 +6,9 @@ function Get-EFComplianceReport {
     .DESCRIPTION
     Reads each selected item and compares it with the expected answer in a checklist.
     Items can cover Windows settings, restart and update state, storage, applications,
-    scheduled jobs, files, certificates, events, processes, account relationships, and
-    approved network services. This command does not apply a fix or change Windows.
+    scheduled jobs, files, certificates, events, processes, local Windows management
+    information, local network placement, account relationships, and approved network services. This command does
+    not apply a fix or change Windows.
 
     TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
     LocalGroupMembership are network-active. They are blocked unless AllowNetworkChecks is
@@ -56,6 +57,7 @@ function Get-EFComplianceReport {
     EndpointForge.ComplianceReport
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.ComplianceReport')]
     param(
         [Parameter(Position = 0)]
         [AllowNull()]

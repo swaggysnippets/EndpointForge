@@ -10,8 +10,12 @@ function Get-EFPendingReboot {
     .EXAMPLE
     $reboot = Get-EFPendingReboot
     if ($reboot.IsRebootPending) { $reboot.Reasons }
+
+    .OUTPUTS
+    EndpointForge.PendingReboot
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.PendingReboot')]
     param()
 
     $null = Test-EFWindows -Throw

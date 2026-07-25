@@ -5,8 +5,8 @@ function New-EFBaseline {
 
     .DESCRIPTION
     A checklist is a list of things you expect to be true, such as a Windows setting,
-    restart state, update state, application, job, file, certificate, event, account
-    relationship, or approved network service; scripts call it a baseline. This command
+    restart state, update state, application, job, file, certificate, event, local Windows
+    management namespace, local IP range, account relationship, or approved network service; scripts call it a baseline. This command
     copies a maintained starter template, validates it, and writes UTF-8 JSON plus its
     schema. It does not apply the checklist or change Windows. A PowerShell WhatIf preview
     creates no files, and existing files require Force.
@@ -28,7 +28,7 @@ function New-EFBaseline {
     EnterpriseRecommended includes every built-in setting; AuditOnly includes only
     BitLocker, Secure Boot, and TPM checks. EverydayChecks creates edit-before-use,
     report-only examples for computer health, updates, applications, jobs, files, logs,
-    certificates, access, events, and approved network connections.
+    certificates, local management information, local IP ranges, access, events, and approved network connections.
 
     .PARAMETER Force
     Replaces an existing checklist file.
@@ -48,6 +48,7 @@ function New-EFBaseline {
     EndpointForge.BaselineCreationResult
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Low')]
+    [OutputType('EndpointForge.BaselineCreationResult')]
     param(
         [Parameter(Mandatory)]
         [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]+$')]
@@ -105,6 +106,7 @@ function New-EFBaseline {
     $clonedControls = $selectedControls | ConvertTo-Json -Depth 12 | ConvertFrom-Json
     $baseline = [pscustomobject][ordered]@{
         '$schema'   = './EndpointForge.Baseline.schema.json'
+        FormatVersion = '1.0'
         Name        = $Name
         Version     = $Version
         Description = $Description
@@ -140,7 +142,7 @@ function New-EFBaseline {
         Baseline     = $createdBaseline
         NextSteps    = @(
             $(if ($Template -eq 'EverydayChecks') {
-                "Replace every sample application, job, path, text, event, certificate, account, host, port, and web address before use: $targetPath"
+                "Replace every sample application, job, path, text, event, certificate, management namespace, IP range, optional network connection name, account, host, port, and web address before use: $targetPath"
             } else {
                 "Edit and review: $targetPath"
             })

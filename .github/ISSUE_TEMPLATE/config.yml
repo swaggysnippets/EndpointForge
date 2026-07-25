@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/swaggysnippets/EndpointForge/security/advisories/new
+    about: Do not disclose security vulnerabilities in a public issue.
+  - name: PowerShell Gallery package
+    url: https://www.powershellgallery.com/packages/EndpointForge
+    about: View released package versions and installation commands.

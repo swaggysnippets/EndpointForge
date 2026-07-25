@@ -39,6 +39,7 @@ function Get-EFInstalledSoftware {
     EndpointForge.InstalledSoftware
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.InstalledSoftware')]
     param(
         [ValidateSet('Machine', 'CurrentUser', 'All')]
         [string]$Scope = 'All',

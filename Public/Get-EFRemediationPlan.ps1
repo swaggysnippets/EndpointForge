@@ -35,6 +35,7 @@ function Get-EFRemediationPlan {
     EndpointForge.RemediationPlan
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.RemediationPlan')]
     param(
         [Parameter(Position = 0)]
         [AllowNull()]

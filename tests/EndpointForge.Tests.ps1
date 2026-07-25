@@ -19,9 +19,9 @@ Describe 'EndpointForge module contract' {
             'Compare-EFEndpointSummary', 'Export-EFEndpointReport', 'Get-EFBaseline', 'Get-EFComplianceReport',
             'Get-EFConfiguration', 'Get-EFEndpointHealth', 'Get-EFEndpointInventory',
             'Get-EFEndpointReadiness', 'Get-EFEndpointSummary', 'Get-EFFleetSummary',
-            'Get-EFInstalledSoftware', 'Get-EFPendingReboot',
+            'Get-EFInstalledSoftware', 'Get-EFManagementAgentHealth', 'Get-EFPendingReboot',
             'Get-EFRemediationPlan', 'Invoke-EFEndpointRemediation', 'New-EFBaseline',
-            'Set-EFConfiguration', 'Show-EFEndpointSummary', 'Show-EFMenu', 'Test-EFBaseline',
+            'Invoke-EFManagementAgentAction', 'Set-EFConfiguration', 'Show-EFEndpointSummary', 'Show-EFMenu', 'Test-EFBaseline',
             'Test-EFEndpointCompliance'
         ) | Sort-Object
         $actual = @(Get-Command -Module EndpointForge -CommandType Function | Select-Object -ExpandProperty Name | Sort-Object)

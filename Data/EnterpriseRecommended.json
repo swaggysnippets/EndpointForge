@@ -1,5 +1,6 @@
 {
   "$schema": "./Baseline.schema.json",
+  "FormatVersion": "1.0",
   "Name": "EnterpriseRecommended",
   "Version": "1.0.0",
   "Description": "A conservative checklist of important Windows health and security settings. EndpointForge can safely preview a small set of supported fixes; hardware protections are checked but never changed automatically.",

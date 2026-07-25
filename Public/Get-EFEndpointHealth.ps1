@@ -6,7 +6,10 @@ function Get-EFEndpointHealth {
     .DESCRIPTION
     Combines inventory and pending-reboot signals into a compact health report suitable
     for RMM, Intune proactive remediation, scheduled tasks, and monitoring ingestion.
-    ExitCode is 0 for Healthy, 1 for Warning, and 2 for Critical.
+    Status is Healthy, Warning, Critical, or Unknown. Unknown means one or more
+    required health signals could not be collected and no known warning or critical
+    issue outranked that uncertainty. ExitCode is 0 only for a complete Healthy
+    result, 1 for Warning, 2 for Critical, and 3 for Unknown.
 
     .PARAMETER MinimumFreeSpacePercent
     The system-drive free-space percentage below which a warning is reported.
@@ -22,8 +25,12 @@ function Get-EFEndpointHealth {
 
     .EXAMPLE
     Get-EFEndpointHealth -MinimumFreeSpacePercent 15 -MaximumUptimeDays 30
+
+    .OUTPUTS
+    EndpointForge.EndpointHealth
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.EndpointHealth')]
     param(
         [ValidateRange(1, 99)]
         [int]$MinimumFreeSpacePercent = 15,
@@ -140,19 +147,46 @@ function Get-EFEndpointHealth {
         })
     }
 
-    $criticalCount = @($checks | Where-Object Severity -eq 'Critical').Count
-    $warningCount = @($checks | Where-Object Severity -eq 'Warning').Count
+    $criticalCount = @($checks | Where-Object {
+        $_.Status -eq 'Unhealthy' -and $_.Severity -eq 'Critical'
+    }).Count
+    $warningCount = @($checks | Where-Object {
+        $_.Status -eq 'Unhealthy' -and $_.Severity -eq 'Warning'
+    }).Count
     $unknownCount = @($checks | Where-Object Status -eq 'Unknown').Count
     $knownCount = $checks.Count - $unknownCount
     $coveragePercent = if ($checks.Count -eq 0) { 0 } else { [math]::Round(($knownCount / $checks.Count) * 100, 1) }
     $dataStatus = if ($unknownCount -eq 0) { 'Complete' } elseif ($knownCount -eq 0) { 'Failed' } else { 'Partial' }
-    $status = if ($criticalCount -gt 0) { 'Critical' } elseif ($warningCount -gt 0) { 'Warning' } else { 'Healthy' }
-    $exitCode = if ($criticalCount -gt 0) { 2 } elseif ($warningCount -gt 0) { 1 } else { 0 }
+    $status = if ($criticalCount -gt 0) {
+        'Critical'
+    }
+    elseif ($warningCount -gt 0) {
+        'Warning'
+    }
+    elseif ($unknownCount -gt 0) {
+        'Unknown'
+    }
+    else {
+        'Healthy'
+    }
+    $exitCode = if ($criticalCount -gt 0) {
+        2
+    }
+    elseif ($warningCount -gt 0) {
+        1
+    }
+    elseif ($unknownCount -gt 0) {
+        3
+    }
+    else {
+        0
+    }
     $score = [math]::Max(0, 100 - ($criticalCount * 25) - ($warningCount * 10))
     $summaryText = switch ($status) {
         'Healthy' { 'No operational health issues were detected.' }
         'Warning' { "$warningCount warning(s) require attention." }
         'Critical' { "$criticalCount critical issue(s) and $warningCount warning(s) require attention." }
+        'Unknown' { "$unknownCount health signal(s) could not be checked, so EndpointForge did not report this endpoint as healthy." }
     }
     $nextStep = if ($status -eq 'Healthy') {
         'Run Get-EFEndpointSummary for one plain-language health and Windows settings checkup.'

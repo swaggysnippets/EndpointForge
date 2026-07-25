@@ -32,6 +32,7 @@ function Compare-EFEndpointSummary {
     EndpointForge.EndpointComparison
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.EndpointComparison')]
     param(
         [Parameter(Mandatory, Position = 0)]
         [Alias('Previous', 'Reference')]

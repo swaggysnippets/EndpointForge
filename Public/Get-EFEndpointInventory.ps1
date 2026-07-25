@@ -31,6 +31,7 @@ function Get-EFEndpointInventory {
     Get-EFEndpointSummary
     #>
     [CmdletBinding()]
+    [OutputType('EndpointForge.EndpointInventory')]
     param(
         [switch]$IncludeSoftware,
         [switch]$IncludeUser,

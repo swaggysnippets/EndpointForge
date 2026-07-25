@@ -37,7 +37,10 @@ foreach ($file in $rootFiles) {
     }
     Copy-Item -LiteralPath $sourcePath -Destination $moduleOutput -Force
 }
-foreach ($directory in @('Public', 'Private', 'Data', 'en-US', 'examples')) {
+foreach ($directory in @('Public', 'Private', 'Data', 'en-US', 'examples', 'docs')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $projectRoot $directory) -PathType Container)) {
+        throw "Required package directory is missing: '$directory'."
+    }
     Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $moduleOutput -Recurse -Force
 }
 

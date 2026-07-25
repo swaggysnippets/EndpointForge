@@ -6,9 +6,9 @@ function Test-EFEndpointCompliance {
     .DESCRIPTION
     A checklist is a list of things expected to be true; scripts call it a baseline and
     call a matching result compliant. Items can cover settings, restart and update state,
-    storage, applications, jobs, files, certificates, events, processes, account
-    relationships, and approved network services. This command does not apply fixes or
-    change Windows.
+    storage, applications, jobs, files, certificates, events, processes, local Windows
+    management information, local network placement, account relationships, and approved network services. This
+    command does not apply fixes or change Windows.
 
     TcpPort, DnsResolution, HttpEndpointHealth, WindowsUpdateAvailable, and
     LocalGroupMembership are network-active. They are blocked unless AllowNetworkChecks is
@@ -53,6 +53,8 @@ function Test-EFEndpointCompliance {
     EndpointForge.ComplianceReport when PassThru is specified.
     #>
     [CmdletBinding()]
+    [OutputType([bool])]
+    [OutputType('EndpointForge.ComplianceReport')]
     param(
         [Parameter(Position = 0)]
         [AllowNull()]

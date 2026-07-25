@@ -43,6 +43,7 @@ function Set-EFConfiguration {
     Get-EFConfiguration
     #>
     [CmdletBinding(DefaultParameterSetName = 'Set', SupportsShouldProcess, ConfirmImpact = 'Low')]
+    [OutputType('EndpointForge.Configuration')]
     param(
         [Parameter(ParameterSetName = 'Set')]
         [ValidateNotNullOrEmpty()]
