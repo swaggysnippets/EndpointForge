@@ -70,7 +70,7 @@ jobs:
         run: .\build\Test-WindowsRuntime.ps1
       - name: Upload Pester results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pester-windows-powershell-${{ matrix.os }}
           path: TestResults/*.xml
@@ -126,7 +126,7 @@ jobs:
         run: .\build\Test-WindowsRuntime.ps1
       - name: Upload Pester results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pester-powershell-7-${{ matrix.os }}
           path: TestResults/*.xml
@@ -156,7 +156,7 @@ jobs:
           .\build\Test-StagedModule.ps1 -ModulePath .\artifacts\EndpointForge
           .\build\Test-PublishReadiness.ps1 -ModulePath .\artifacts\EndpointForge
       - name: Upload verified module
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: EndpointForge-module
           path: artifacts/
